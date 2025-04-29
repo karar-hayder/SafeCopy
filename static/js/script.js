@@ -6,11 +6,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const runBackupBtn = document.getElementById('run-backup-btn');
     const mappingList = document.getElementById('mapping-list');
     const actionLog = document.getElementById('action-log');
-    const backupProgressModal = new bootstrap.Modal(document.getElementById('backup-progress-modal'));
+    const backupProgressModal = document.getElementById('backup-progress-modal');
     const backupProgressBar = document.getElementById('backup-progress-bar');
     const backupStatus = document.getElementById('backup-status');
 
     let mappings = [];
+
+    // Modal functions
+    function showModal(modalElement) {
+        modalElement.style.display = 'block';
+    }
+
+    function hideModal(modalElement) {
+        modalElement.style.display = 'none';
+    }
 
     // Load existing mappings from server
     function loadMappings() {
@@ -125,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Show backup progress modal
-        backupProgressModal.show();
+        showModal(backupProgressModal);
         backupProgressBar.style.width = '0%';
         backupStatus.textContent = 'Preparing backup...';
 
@@ -153,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Close modal after a delay
                     setTimeout(() => {
-                        backupProgressModal.hide();
+                        hideModal(backupProgressModal);
                     }, 2000);
                 } else {
                     backupProgressBar.style.width = '100%';
