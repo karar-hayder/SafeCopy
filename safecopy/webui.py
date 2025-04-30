@@ -2,9 +2,17 @@ import os
 import json
 from flask import Flask, render_template, request, redirect, flash, url_for, jsonify
 from flask_caching import Cache
-from safecopy.config import load_config, save_config
+from safecopy.config import (
+    load_config,
+    save_config,
+    CONFIG_FILE,
+    CONFIG_BACKUP,
+    DEFAULT_CONFIG,
+)
 from safecopy.utils import get_available_drives, get_folder_size, format_size
 from safecopy.backup import perform_backup
+import logging
+import shutil
 
 app = Flask(
     __name__,
@@ -14,25 +22,38 @@ app = Flask(
 app.config["CACHE_TYPE"] = "simple"  # Simple in-memory cache (for demo purposes)
 app.config["SECRET_KEY"] = os.urandom(24)  # For flash messages
 cache = Cache(app)
+logger = logging.getLogger(__name__)
 
 
 @app.route("/", methods=["GET", "POST"])
 def settings():
-    drives = get_available_drives()
-    if request.method == "POST":
-        new_mapping = {
-            "source": request.form["source"],
-            "destination": request.form["destination"],
-        }
-
+    """Render the settings page."""
+    try:
+        drives = get_available_drives()
         config = load_config()
-        config["mappings"].append(new_mapping)
-        save_config(config)
-        flash("Mapping added successfully!", "success")
-        return redirect("/")
+        return render_template("settings.html", config=config, drives=drives)
+    except Exception as e:
+        logger.error(f"Error loading settings page: {e}")
+        # If there's an error loading the config, try to fix it
+        try:
+            # Try to restore from backup
+            if os.path.exists(CONFIG_BACKUP):
+                shutil.copy(CONFIG_BACKUP, CONFIG_FILE)
+                logger.info(f"Restored config from backup: {CONFIG_BACKUP}")
+            else:
+                # Create a new config file
+                with open(CONFIG_FILE, "w") as f:
+                    json.dump(DEFAULT_CONFIG, f, indent=4)
+                logger.info(f"Created new config file after corruption: {CONFIG_FILE}")
 
-    config = load_config()
-    return render_template("settings.html", config=config, drives=drives)
+            # Try again with the fixed config
+            config = load_config()
+            drives = get_available_drives()
+            return render_template("settings.html", config=config, drives=drives)
+        except Exception as e2:
+            logger.error(f"Failed to recover from config error: {e2}")
+            # Last resort: use default config
+            return render_template("settings.html", config=DEFAULT_CONFIG, drives=[])
 
 
 @app.route("/get_mappings")
@@ -51,11 +72,21 @@ def save_mappings():
             return jsonify({"success": False, "error": "Invalid request data"}), 400
 
         config = load_config()
-        config["mappings"] = data["mappings"]
-        save_config(config)
+        if config["mappings"] != data["mappings"]:
+            config["mappings"] = data["mappings"]
+
+            # Save config and check for errors
+            if not save_config(config):
+                return (
+                    jsonify(
+                        {"success": False, "error": "Failed to save configuration"}
+                    ),
+                    500,
+                )
 
         return jsonify({"success": True})
     except Exception as e:
+        logger.error(f"Error saving mappings: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -80,41 +111,69 @@ def delete_mapping():
 @app.route("/run_backup", methods=["POST"])
 def run_backup():
     try:
-        successful, failed = perform_backup()
+        data = request.get_json()
+        mappings = data.get("mappings", [])
 
-        if not successful and not failed:
-            return jsonify(
-                {"success": False, "error": "No backup mappings configured."}
-            )
-        elif successful and not failed:
-            return jsonify(
-                {
-                    "success": True,
-                    "message": f"Backup completed successfully! {len(successful)} backup(s) performed.",
-                }
-            )
-        elif successful and failed:
-            return jsonify(
-                {
-                    "success": True,
-                    "message": f"Backup partially completed. {len(successful)} successful, {len(failed)} failed.",
-                    "failed": failed,
-                }
-            )
-        else:
-            error_messages = [
-                f"Error backing up {src} to {dst}: {error}"
-                for src, dst, error in failed
-            ]
+        if not mappings:
+            return jsonify({"success": False, "error": "No backup mappings configured"})
+
+        results = []
+        for mapping in mappings:
+            source = mapping.get("source")
+            destination = mapping.get("destination")
+            max_versions = mapping.get("max_versions", 3)
+            compression = mapping.get("compression", "none")
+
+            try:
+                # Create backup with compression settings
+                backup_result = perform_backup(
+                    source_path=source,
+                    dest_path=destination,
+                    max_versions=max_versions,
+                    compression=compression,
+                )
+                results.append(
+                    {
+                        "source": source,
+                        "success": True,
+                        "message": f"Backup completed successfully to {destination}",
+                    }
+                )
+            except Exception as e:
+                results.append({"source": source, "success": False, "error": str(e)})
+
+        # Check if any backups succeeded
+        successful_backups = [r for r in results if r["success"]]
+        if not successful_backups:
             return jsonify(
                 {
                     "success": False,
-                    "error": f"Backup failed for all {len(failed)} mapping(s).",
-                    "details": error_messages,
+                    "error": "All backups failed",
+                    "details": "\n".join(
+                        [f"{r['source']}: {r['error']}" for r in results]
+                    ),
                 }
             )
+        elif len(successful_backups) < len(results):
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Some backups completed successfully",
+                    "details": "\n".join(
+                        [
+                            f"{r['source']}: {r.get('message', r.get('error'))}"
+                            for r in results
+                        ]
+                    ),
+                }
+            )
+        else:
+            return jsonify(
+                {"success": True, "message": "All backups completed successfully"}
+            )
+
     except Exception as e:
-        return jsonify({"success": False, "error": f"Backup process failed: {str(e)}"})
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/browse_folders")
@@ -123,7 +182,7 @@ def browse_folders():
     path = request.args.get("path", "/")
 
     # Handle root path (show drives)
-    if path == "/":
+    if path == "/" or path == "":
         drives = get_available_drives()
         return jsonify({"drives": drives, "folders": []})
 
@@ -173,6 +232,40 @@ def folder_preview():
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get_backup_settings", methods=["GET"])
+def get_backup_settings():
+    """Get the current backup settings."""
+    config = load_config()
+    settings = config.get("backup_settings", {"maxVersions": 3, "compression": "none"})
+    return jsonify({"success": True, "settings": settings})
+
+
+@app.route("/save_backup_settings", methods=["POST"])
+def save_backup_settings():
+    """Save the backup settings."""
+    try:
+        data = request.get_json()
+        settings = data.get("settings", {})
+
+        config = load_config()
+        if config["backup_settings"] != settings:
+            config["backup_settings"] = settings
+
+            # Save config and check for errors
+            if not save_config(config):
+                return (
+                    jsonify(
+                        {"success": False, "error": "Failed to save configuration"}
+                    ),
+                    500,
+                )
+
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Error saving backup settings: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 def run(port=5000, debug=True):

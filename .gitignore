@@ -180,5 +180,5 @@ cython_debug/
 *.swo
 
 # SafeCopy specific
-config.json
+config.json*
 safecopy.log

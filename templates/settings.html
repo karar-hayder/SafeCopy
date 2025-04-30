@@ -4,125 +4,126 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SafeCopy Settings</title>
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <link rel="icon" href="{{ url_for('static', filename='imgs/logo.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <img src="{{ url_for('static', filename='imgs/logo.png') }}" alt="SafeCopy Logo" height="50" class="logo">
-            <h1>SafeCopy Settings</h1>
+            <div class="header-content">
+                <img src="{{ url_for('static', filename='imgs/logo.png') }}" alt="SafeCopy Logo" height="50" class="logo">
+                <h1>SafeCopy Settings</h1>
+            </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5>Source Folder</h5>
-                <button class="btn btn-warning" id="run-backup-btn">
-                    <span class="icon">▶</span> Run Backup Now
-                </button>
             </div>
             <div class="card-body">
                 <div class="input-group">
-                    <input type="text" id="source-input" class="form-control" placeholder="Select source folder" readonly>
-                    <button class="btn btn-primary" id="browse-btn">Browse</button>
-                </div>
-                
-                <div id="folder-preview" class="folder-preview" style="display: none;">
-                    <div class="folder-preview-header">
-                        <h6>Folder Preview</h6>
-                        <button class="btn btn-sm" id="refresh-preview">Refresh</button>
-                    </div>
-                    <div id="folder-preview-content" class="folder-preview-content"></div>
+                    <input type="text" id="sourcePath" class="form-control" readonly>
+                    <button class="btn btn-primary" onclick="browseFolder('source')">Browse</button>
                 </div>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5>Destination Folder</h5>
             </div>
             <div class="card-body">
                 <div class="input-group">
-                    <input type="text" id="destination-input" class="form-control" placeholder="Select destination folder" readonly>
-                    <button class="btn btn-primary" id="browse-dest-btn">Browse</button>
-                </div>
-                
-                <div id="destination-preview" class="folder-preview" style="display: none;">
-                    <div class="folder-preview-header">
-                        <h6>Folder Preview</h6>
-                        <button class="btn btn-sm" id="refresh-dest-preview">Refresh</button>
-                    </div>
-                    <div id="destination-preview-content" class="folder-preview-content"></div>
+                    <input type="text" id="destPath" class="form-control" readonly>
+                    <button class="btn btn-primary" onclick="browseFolder('dest')">Browse</button>
                 </div>
             </div>
         </div>
-        
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Backup Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="maxVersions">Maximum Versions to Keep:</label>
+                    <input type="number" id="maxVersions" class="form-control" value="3" min="1" max="10">
+                </div>
+                <div class="form-group">
+                    <label for="compression">Compression Level:</label>
+                    <select id="compression" class="form-control">
+                        <option value="none">None</option>
+                        <option value="zip">ZIP</option>
+                        <option value="tar">TAR</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h5>Folder Mappings</h5>
             </div>
             <div class="card-body">
-                <div id="mapping-list" class="mapping-list">
-                    <!-- Mappings will be added here dynamically -->
-                </div>
-                
+                <div id="mappingsList" class="mapping-list"></div>
                 <div class="button-group">
-                    <button class="btn btn-success" id="add-mapping">Add Mapping</button>
-                    <button class="btn btn-primary" id="save-mappings">Save Mappings</button>
+                    <button class="btn btn-success" onclick="addMapping()">Add Mapping</button>
+                    <button class="btn btn-primary" onclick="saveMappings()">Save Mappings</button>
                 </div>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5>Action Log</h5>
             </div>
             <div class="card-body">
-                <div id="action-log" class="action-log">
-                    <!-- Action log entries will be added here dynamically -->
-                </div>
+                <div id="actionLog" class="action-log"></div>
             </div>
         </div>
+
+        <div class="button-group">
+            <button class="btn btn-primary" onclick="runBackup()">Run Backup</button>
+        </div>
     </div>
-    
+
     <!-- Folder Browser Modal -->
-    <div id="folder-browser" class="folder-browser" style="display: none;">
-        <div class="folder-browser-content">
-            <div class="folder-browser-header">
+    <div id="folderBrowserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h5>Browse Folders</h5>
-                <div class="folder-browser-actions">
-                    <button class="btn btn-sm" id="up-btn">Up</button>
-                    <button class="btn btn-sm" id="cancel-btn">Cancel</button>
-                    <button class="btn btn-sm btn-primary" id="select-btn" disabled>Select</button>
+                <button class="close-btn" onclick="hideModal('folderBrowserModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <input type="text" id="currentPath" class="form-control" readonly>
+                    <button class="btn btn-primary" onclick="navigateUp()">Up</button>
                 </div>
+                <div id="folderList" class="folder-list"></div>
             </div>
-            <div class="folder-browser-path">
-                <input type="text" id="current-path" class="form-control" readonly>
-            </div>
-            <div id="folder-list" class="folder-list">
-                <!-- Folders will be listed here -->
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="selectFolder()">Select</button>
+                <button class="btn btn-secondary" onclick="hideModal('folderBrowserModal')">Cancel</button>
             </div>
         </div>
     </div>
-    
+
     <!-- Backup Progress Modal -->
-    <div id="backup-progress-modal" class="modal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Backup in Progress</h5>
+    <div id="backupProgressModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Backup Progress</h5>
+                <button class="close-btn" onclick="hideModal('backupProgressModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                 </div>
-                <div class="modal-body">
-                    <div class="progress">
-                        <div id="backup-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <div id="backup-status" class="text-center">Preparing backup...</div>
-                </div>
+                <div id="progressStatus" class="progress-status">Preparing backup...</div>
             </div>
         </div>
     </div>
-    
-    <script src="{{ url_for('static', filename='js/folder-browser.js') }}"></script>
+
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

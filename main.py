@@ -1,5 +1,7 @@
 from safecopy import backup, config, scheduler, webui
 import argparse
+import threading
+from safecopy.tray import SafeCopyTray
 
 
 def parse_args():
@@ -26,7 +28,12 @@ def main():
     # Start the backup scheduler with the specified interval
     scheduler.start(interval_minutes=args.interval)
 
-    # Run the web UI
+    # Create and start the system tray
+    tray = SafeCopyTray(port=args.port)
+    tray_thread = threading.Thread(target=tray.start, daemon=True)
+    tray_thread.start()
+
+    # Run the web UI in the main thread
     webui.run(port=args.port)
 
 
