@@ -104,3 +104,42 @@ The application logs are stored in `safecopy.log` and include detailed informati
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Development Roadmap
+
+### Version 0.1.0 (Current Release)
+
+- ✅ Local folder-to-folder backup (manual or scheduled)
+- ✅ Local web UI (Flask) for configuration
+- ✅ Save settings to JSON
+- ✅ Basic logging
+- ✅ Auto-start in background
+- ✅ Backup history viewer
+
+### Version 0.2.0 (Next Release)
+
+- 🔄 System tray icon
+- 🔄 File versioning (keep last 3 versions)
+- 🔄 Improved error handling and recovery
+- 🔄 Backup compression options
+
+### Version 0.3.0
+
+- 🔄 Password protection for web UI
+- 🔄 Advanced backup scheduling (daily, weekly, monthly)
+- 🔄 Email notifications for backup status
+- 🔄 Backup verification and integrity checks
+
+### Version 0.4.0
+
+- 🔄 Unit tests for core modules
+- 🔄 Performance optimizations for large backups
+- 🔄 Backup encryption options
+- 🔄 Detailed backup statistics and reporting
+
+### Version 1.0.0
+
+- 🔄 PyInstaller packaging for standalone executable
+- 🔄 Windows installer with Inno Setup
+- 🔄 Windows service mode
+- 🔄 Comprehensive documentation

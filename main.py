@@ -16,7 +16,8 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the SafeCopy application."""
     args = parse_args()
 
     # Initialize configuration
@@ -27,3 +28,7 @@ if __name__ == "__main__":
 
     # Run the web UI
     webui.run(port=args.port)
+
+
+if __name__ == "__main__":
+    main()
