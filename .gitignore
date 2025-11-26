@@ -183,3 +183,4 @@ cython_debug/
 config.json*
 safecopy.log
 safecopy.db
+.devdbrc
