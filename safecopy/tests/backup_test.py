@@ -6,7 +6,7 @@ import shutil
 import tempfile
 
 try:
-    import pytest
+    import pytest  # type: ignore
 except ImportError:  # noqa: W0611  # Show a warning if pytest is missing for linters
     pytest = None  # type: ignore
 

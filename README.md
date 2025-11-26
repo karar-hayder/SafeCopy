@@ -149,7 +149,7 @@ Distributed under the MIT License. See `LICENSE` for details.
 
 ### v0.4.0 *(in progress)*
 
-- 🔄 Unit tests for backup/schedule modules
+- ✅ Unit tests for backup/schedule modules
 - 🔄 Optimizations for large-scale backups
 - 🔄 Backup encryption support
 - 🔄 Stats/reporting dashboard

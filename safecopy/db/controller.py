@@ -30,6 +30,8 @@ def get_db_connection(db_path: str = None):
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
+        # Ensure foreign key constraints are enforced on all connections
+        conn.execute("PRAGMA foreign_keys=ON")
         yield conn
         conn.commit()
     except Exception as e:

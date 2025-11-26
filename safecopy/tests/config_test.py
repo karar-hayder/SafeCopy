@@ -3,7 +3,10 @@ import os
 import shutil
 import tempfile
 
-import pytest
+try:
+    import pytest  # type: ignore
+except ImportError:
+    pytest = None  # type: ignore
 
 from safecopy import config
 

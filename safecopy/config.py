@@ -61,6 +61,7 @@ if not SECRET_KEY:
     load_dotenv(ENV_PATH)
 
 CONFIG_FILE = "config.json"
+CONFIG_PATH = os.path.join(os.getcwd(), CONFIG_FILE)
 CONFIG_BACKUP = "config.json.bak"
 DEFAULT_CONFIG = {
     "mappings": [],
