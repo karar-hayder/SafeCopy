@@ -1,8 +1,8 @@
-import sqlite3
 import logging
-from datetime import datetime
-from typing import List, Dict, Optional, Any
+import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -176,13 +176,21 @@ def init_database(db_path: str = None) -> bool:
             )
 
             # Check current database version and migrate if needed
-            cursor.execute("SELECT version FROM database_version ORDER BY version DESC LIMIT 1")
+            cursor.execute(
+                "SELECT version FROM database_version ORDER BY version DESC LIMIT 1"
+            )
             current_version_row = cursor.fetchone()
-            current_version = current_version_row["version"] if current_version_row else 0
+            current_version = (
+                current_version_row["version"] if current_version_row else 0
+            )
 
             if current_version < DB_VERSION:
                 # Migration from version 1 to 2
-                logger.info("Migrating database from version %s to %s", current_version, DB_VERSION)
+                logger.info(
+                    "Migrating database from version %s to %s",
+                    current_version,
+                    DB_VERSION,
+                )
                 # Tables are created with IF NOT EXISTS, so this is safe
                 cursor.execute(
                     """
@@ -496,7 +504,7 @@ def add_backup_history(
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO backup_history 
+                INSERT INTO backup_history
                 (mapping_id, success, message, duration, size_bytes, backup_path, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
@@ -618,7 +626,9 @@ def get_backup_settings(db_path: str = None) -> Dict[str, str]:
         return {}
 
 
-def get_backup_setting(key: str, default: str = None, db_path: str = None) -> Optional[str]:
+def get_backup_setting(
+    key: str, default: str = None, db_path: str = None
+) -> Optional[str]:
     """
     Get a specific backup setting by key.
 
@@ -738,7 +748,9 @@ def get_database_version(db_path: str = None) -> int:
     try:
         with get_db_connection(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT version FROM database_version ORDER BY version DESC LIMIT 1")
+            cursor.execute(
+                "SELECT version FROM database_version ORDER BY version DESC LIMIT 1"
+            )
 
             row = cursor.fetchone()
             if row:

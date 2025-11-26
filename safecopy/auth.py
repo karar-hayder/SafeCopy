@@ -3,16 +3,11 @@ Authentication module for SafeCopy web UI.
 """
 
 import logging
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import (
-    UserMixin,
-    LoginManager,
-    login_user,
-    logout_user,
-    login_required,
-    current_user,
-)
-from safecopy.db.controller import get_db_connection, DEFAULT_DB_PATH
+
+from flask_login import LoginManager, UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +31,8 @@ def load_user(user_id):
         with get_db_connection(DEFAULT_DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, username FROM web_auth WHERE id = ? AND enabled = 1", (user_id,)
+                "SELECT id, username FROM web_auth WHERE id = ? AND enabled = 1",
+                (user_id,),
             )
             row = cursor.fetchone()
             if row:

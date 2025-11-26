@@ -2,12 +2,12 @@
 Advanced backup scheduler with daily, weekly, and monthly support.
 """
 
+import logging
 import os
 import threading
 import time
-import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 try:
     import schedule  # type: ignore
@@ -17,10 +17,10 @@ except ImportError:
         "The 'schedule' package could not be imported. Scheduling features will be unavailable."
     )
 
-from safecopy.config import load_config, USE_DATABASE
 from safecopy.backup import run_backup
+from safecopy.config import USE_DATABASE, load_config
+from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection, get_mappings
 from safecopy.utils import get_available_drives
-from safecopy.db.controller import get_mappings, get_db_connection, DEFAULT_DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ def _schedule_job_key(mapping: Dict, schedule_type: str, schedule_value: str) ->
     """
     Returns a unique key for a job based on mapping id, schedule type, and schedule value.
     """
-    return f"{mapping.get('id','')}::{schedule_type}::{schedule_value}"
+    return f"{mapping.get('id', '')}::{schedule_type}::{schedule_value}"
 
 
 def setup_schedule_job(
@@ -191,7 +191,9 @@ def setup_schedule_job(
                 run_scheduled_backup, mapping=mapping
             )
             logger.info(
-                "Scheduled daily backup at %s for mapping %s", schedule_value, mapping.get("id")
+                "Scheduled daily backup at %s for mapping %s",
+                schedule_value,
+                mapping.get("id"),
             )
 
         elif schedule_type == "weekly":
@@ -247,7 +249,9 @@ def setup_schedule_job(
         elif schedule_type == "interval":
             # schedule_value should be minutes
             interval_minutes = int(schedule_value)
-            schedule.every(interval_minutes).minutes.do(run_scheduled_backup, mapping=mapping)
+            schedule.every(interval_minutes).minutes.do(
+                run_scheduled_backup, mapping=mapping
+            )
             logger.info(
                 "Scheduled interval backup every %s minutes for mapping %s",
                 interval_minutes,
@@ -321,7 +325,9 @@ def setup_all_schedules(db_path: str = None):
             mappings = config.get("mappings", [])
             for mapping in mappings:
                 # Use default interval scheduling
-                setup_schedule_job(mapping, "interval", "10", scheduled_keys=scheduled_keys)
+                setup_schedule_job(
+                    mapping, "interval", "10", scheduled_keys=scheduled_keys
+                )
 
         logger.info("Setup %d scheduled jobs", len(schedule.jobs))
 

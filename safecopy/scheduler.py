@@ -1,9 +1,10 @@
+import logging
 import threading
 import time
-import logging
 from datetime import datetime
-from safecopy.config import load_config, save_config
+
 from safecopy.backup import perform_backup
+from safecopy.config import load_config, save_config
 from safecopy.utils import get_available_drives
 
 # Configure logging

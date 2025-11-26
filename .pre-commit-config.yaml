@@ -12,28 +12,24 @@ repos:
           - id: check-merge-conflict
           - id: check-json
 
+    - repo: https://github.com/PyCQA/flake8
+      rev: 7.3.0
+      hooks:
+          - id: flake8
+            additional_dependencies: ["flake8-bugbear", "flake8-comprehensions"]
+            args: ["--ignore=E501,W503"]
+
     - repo: https://github.com/psf/black
       rev: 25.11.0
       hooks:
           - id: black
             language_version: python3
 
-    - repo: https://github.com/PyCQA/flake8
-      rev: 7.3.0
-      hooks:
-          - id: flake8
-            additional_dependencies: ["flake8-bugbear", "flake8-comprehensions"]
-
-    - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.18.2
-      hooks:
-          - id: mypy
-            additional_dependencies: []
-
     - repo: https://github.com/pre-commit/mirrors-isort
       rev: v5.10.1
       hooks:
           - id: isort
+            args: ["--profile=black"]
 
     - repo: https://github.com/pre-commit/mirrors-prettier
       rev: v4.0.0-alpha.8

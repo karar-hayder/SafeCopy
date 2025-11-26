@@ -8,8 +8,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from safecopy import notifications, verification
 from safecopy.config import USE_DATABASE, load_config, save_config
-from safecopy import verification, notifications
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +31,9 @@ def sanitize_filename(name, max_length=40):
     return name
 
 
-def perform_backup(source_path, dest_path, max_versions=3, compression="none", mapping_id=None):
+def perform_backup(
+    source_path, dest_path, max_versions=3, compression="none", mapping_id=None
+):
     """
     Perform a backup of the source directory to the destination directory.
 
@@ -65,7 +67,9 @@ def perform_backup(source_path, dest_path, max_versions=3, compression="none", m
         mapping_part = ""
         if mapping_id is not None:
             mapping_part = f"{mapping_id}"
-        compression_part = compression if compression and compression != "none" else "plain"
+        compression_part = (
+            compression if compression and compression != "none" else "plain"
+        )
 
         backup_name_parts = [
             "backup",
@@ -195,8 +199,8 @@ def run_backup(mapping):
         # Verify backup if successful and save verification result
         if history_id and success and backup_path:
             try:
-                verify_success, source_checksum, backup_checksum = verification.verify_backup(
-                    source, backup_path
+                verify_success, source_checksum, backup_checksum = (
+                    verification.verify_backup(source, backup_path)
                 )
                 if not verify_success:
                     logger.warning("Backup verification failed for %s", backup_path)

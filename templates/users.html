@@ -1,220 +1,288 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SafeCopy - User Management</title>
-    <link rel="icon" href="{{ url_for('static', filename='imgs/logo.ico') }}" type="image/x-icon">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='imgs/logo.ico') }}"
+      type="image/x-icon"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <div class="header-content">
-                <img src="{{ url_for('static', filename='imgs/logo.png') }}" alt="SafeCopy Logo" height="50" class="logo">
-                <h1>User Management</h1>
-                <div class="header-actions">
-                    <a href="{{ url_for('settings') }}" class="btn btn-secondary">Settings</a>
-                    <a href="{{ url_for('index') }}" class="btn btn-secondary">Dashboard</a>
-                    <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
-                </div>
-            </div>
+      <div class="header">
+        <div class="header-content">
+          <img
+            src="{{ url_for('static', filename='imgs/logo.png') }}"
+            alt="SafeCopy Logo"
+            height="50"
+            class="logo"
+          />
+          <h1>User Management</h1>
+          <div class="header-actions">
+            <a href="{{ url_for('settings') }}" class="btn btn-secondary"
+              >Settings</a
+            >
+            <a href="{{ url_for('index') }}" class="btn btn-secondary"
+              >Dashboard</a
+            >
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary"
+              >Logout</a
+            >
+          </div>
         </div>
+      </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}" style="margin: 10px 0; padding: 10px; border-radius: 4px;">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div
+        class="alert alert-{{ category }}"
+        style="margin: 10px 0; padding: 10px; border-radius: 4px"
+      >
+        {{ message }}
+      </div>
+      {% endfor %} {% endif %} {% endwith %}
 
-        <div class="card">
-            <div class="card-header">
-                <h5>Create New User</h5>
-            </div>
-            <div class="card-body">
-                <form id="createUserForm" onsubmit="createUser(event)">
-                    <div class="form-group">
-                        <label for="newUsername">Username:</label>
-                        <input type="text" id="newUsername" class="form-control" required autocomplete="username">
-                    </div>
-                    <div class="form-group">
-                        <label for="newPassword">Password:</label>
-                        <input type="password" id="newPassword" class="form-control" required autocomplete="new-password" minlength="6">
-                        <small class="form-text text-muted">Minimum 6 characters</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="confirmPassword">Confirm Password:</label>
-                        <input type="password" id="confirmPassword" class="form-control" required autocomplete="new-password">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Create User</button>
-                </form>
-            </div>
+      <div class="card">
+        <div class="card-header">
+          <h5>Create New User</h5>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h5>Existing Users</h5>
+        <div class="card-body">
+          <form id="createUserForm" onsubmit="createUser(event)">
+            <div class="form-group">
+              <label for="newUsername">Username:</label>
+              <input
+                type="text"
+                id="newUsername"
+                class="form-control"
+                required
+                autocomplete="username"
+              />
             </div>
-            <div class="card-body">
-                <div id="usersList" class="users-list">
-                    <p>Loading users...</p>
-                </div>
+            <div class="form-group">
+              <label for="newPassword">Password:</label>
+              <input
+                type="password"
+                id="newPassword"
+                class="form-control"
+                required
+                autocomplete="new-password"
+                minlength="6"
+              />
+              <small class="form-text text-muted">Minimum 6 characters</small>
             </div>
+            <div class="form-group">
+              <label for="confirmPassword">Confirm Password:</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                class="form-control"
+                required
+                autocomplete="new-password"
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">Create User</button>
+          </form>
         </div>
+      </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h5>Change Password</h5>
-            </div>
-            <div class="card-body">
-                <form id="changePasswordForm" onsubmit="changePassword(event)">
-                    <div class="form-group">
-                        <label for="changeUsername">Username:</label>
-                        <input type="text" id="changeUsername" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="oldPassword">Current Password:</label>
-                        <input type="password" id="oldPassword" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="newPasswordChange">New Password:</label>
-                        <input type="password" id="newPasswordChange" class="form-control" required minlength="6">
-                        <small class="form-text text-muted">Minimum 6 characters</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="confirmPasswordChange">Confirm New Password:</label>
-                        <input type="password" id="confirmPasswordChange" class="form-control" required>
-                    </div>
-                    <button type="submit" class="btn btn-warning">Change Password</button>
-                </form>
-            </div>
+      <div class="card">
+        <div class="card-header">
+          <h5>Existing Users</h5>
         </div>
+        <div class="card-body">
+          <div id="usersList" class="users-list">
+            <p>Loading users...</p>
+          </div>
+        </div>
+      </div>
 
-        <div class="button-group">
-            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Dashboard</a>
+      <div class="card">
+        <div class="card-header">
+          <h5>Change Password</h5>
         </div>
+        <div class="card-body">
+          <form id="changePasswordForm" onsubmit="changePassword(event)">
+            <div class="form-group">
+              <label for="changeUsername">Username:</label>
+              <input
+                type="text"
+                id="changeUsername"
+                class="form-control"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="oldPassword">Current Password:</label>
+              <input
+                type="password"
+                id="oldPassword"
+                class="form-control"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="newPasswordChange">New Password:</label>
+              <input
+                type="password"
+                id="newPasswordChange"
+                class="form-control"
+                required
+                minlength="6"
+              />
+              <small class="form-text text-muted">Minimum 6 characters</small>
+            </div>
+            <div class="form-group">
+              <label for="confirmPasswordChange">Confirm New Password:</label>
+              <input
+                type="password"
+                id="confirmPasswordChange"
+                class="form-control"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-warning">
+              Change Password
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary"
+          >Back to Dashboard</a
+        >
+      </div>
     </div>
 
     <script>
-        function createUser(event) {
-            event.preventDefault();
-            
-            const username = document.getElementById('newUsername').value;
-            const password = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
+      function createUser(event) {
+        event.preventDefault();
 
-            if (password !== confirmPassword) {
-                alert('Passwords do not match!');
-                return;
-            }
+        const username = document.getElementById("newUsername").value;
+        const password = document.getElementById("newPassword").value;
+        const confirmPassword =
+          document.getElementById("confirmPassword").value;
 
-            if (password.length < 6) {
-                alert('Password must be at least 6 characters long!');
-                return;
-            }
-
-            fetch('/create_user', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: username, password: password})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('User created successfully!');
-                    document.getElementById('createUserForm').reset();
-                    loadUsers();
-                } else {
-                    alert('Error creating user: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-            });
+        if (password !== confirmPassword) {
+          alert("Passwords do not match!");
+          return;
         }
 
-        function changePassword(event) {
-            event.preventDefault();
-            
-            const username = document.getElementById('changeUsername').value;
-            const oldPassword = document.getElementById('oldPassword').value;
-            const newPassword = document.getElementById('newPasswordChange').value;
-            const confirmPassword = document.getElementById('confirmPasswordChange').value;
-
-            if (newPassword !== confirmPassword) {
-                alert('New passwords do not match!');
-                return;
-            }
-
-            if (newPassword.length < 6) {
-                alert('New password must be at least 6 characters long!');
-                return;
-            }
-
-            fetch('/change_password', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    username: username,
-                    old_password: oldPassword,
-                    new_password: newPassword
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Password changed successfully!');
-                    document.getElementById('changePasswordForm').reset();
-                } else {
-                    alert('Error changing password: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-            });
+        if (password.length < 6) {
+          alert("Password must be at least 6 characters long!");
+          return;
         }
 
-        function loadUsers() {
-            fetch('/get_users')
-            .then(response => response.json())
-            .then(data => {
-                const usersList = document.getElementById('usersList');
-                if (data.success && data.users && data.users.length > 0) {
-                    usersList.innerHTML = '';
-                    data.users.forEach(user => {
-                        const div = document.createElement('div');
-                        div.className = 'user-item';
-                        div.style.padding = '12px';
-                        div.style.borderBottom = '1px solid #eee';
-                        div.style.display = 'flex';
-                        div.style.justifyContent = 'space-between';
-                        div.style.alignItems = 'center';
-                        div.innerHTML = `
+        fetch("/create_user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: username, password: password }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              alert("User created successfully!");
+              document.getElementById("createUserForm").reset();
+              loadUsers();
+            } else {
+              alert("Error creating user: " + (data.error || "Unknown error"));
+            }
+          })
+          .catch((error) => {
+            alert("Error: " + error);
+          });
+      }
+
+      function changePassword(event) {
+        event.preventDefault();
+
+        const username = document.getElementById("changeUsername").value;
+        const oldPassword = document.getElementById("oldPassword").value;
+        const newPassword = document.getElementById("newPasswordChange").value;
+        const confirmPassword = document.getElementById(
+          "confirmPasswordChange",
+        ).value;
+
+        if (newPassword !== confirmPassword) {
+          alert("New passwords do not match!");
+          return;
+        }
+
+        if (newPassword.length < 6) {
+          alert("New password must be at least 6 characters long!");
+          return;
+        }
+
+        fetch("/change_password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: username,
+            old_password: oldPassword,
+            new_password: newPassword,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              alert("Password changed successfully!");
+              document.getElementById("changePasswordForm").reset();
+            } else {
+              alert(
+                "Error changing password: " + (data.error || "Unknown error"),
+              );
+            }
+          })
+          .catch((error) => {
+            alert("Error: " + error);
+          });
+      }
+
+      function loadUsers() {
+        fetch("/get_users")
+          .then((response) => response.json())
+          .then((data) => {
+            const usersList = document.getElementById("usersList");
+            if (data.success && data.users && data.users.length > 0) {
+              usersList.innerHTML = "";
+              data.users.forEach((user) => {
+                const div = document.createElement("div");
+                div.className = "user-item";
+                div.style.padding = "12px";
+                div.style.borderBottom = "1px solid #eee";
+                div.style.display = "flex";
+                div.style.justifyContent = "space-between";
+                div.style.alignItems = "center";
+                div.innerHTML = `
                             <div>
                                 <strong>${user.username}</strong>
                                 <span style="color: #666; margin-left: 10px;">Created: ${new Date(user.created_at).toLocaleDateString()}</span>
                                 ${user.enabled ? '<span style="color: green; margin-left: 10px;">● Active</span>' : '<span style="color: red; margin-left: 10px;">● Disabled</span>'}
                             </div>
                         `;
-                        usersList.appendChild(div);
-                    });
-                } else {
-                    usersList.innerHTML = '<p style="color: #666;">No users found. Create the first user to enable authentication.</p>';
-                }
-            })
-            .catch(error => {
-                document.getElementById('usersList').innerHTML = '<p style="color: #e74c3c;">Error loading users</p>';
-            });
-        }
+                usersList.appendChild(div);
+              });
+            } else {
+              usersList.innerHTML =
+                '<p style="color: #666;">No users found. Create the first user to enable authentication.</p>';
+            }
+          })
+          .catch((error) => {
+            document.getElementById("usersList").innerHTML =
+              '<p style="color: #e74c3c;">Error loading users</p>';
+          });
+      }
 
-        window.addEventListener('DOMContentLoaded', function() {
-            loadUsers();
-        });
+      window.addEventListener("DOMContentLoaded", function () {
+        loadUsers();
+      });
     </script>
-</body>
+  </body>
 </html>
-

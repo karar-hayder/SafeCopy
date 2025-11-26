@@ -4,13 +4,13 @@ Backup verification and integrity checking module.
 
 import hashlib
 import logging
-import tempfile
-import shutil
-import zipfile
 import tarfile
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
-from safecopy.db.controller import get_db_connection, DEFAULT_DB_PATH
+
+from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,9 @@ def calculate_checksum(file_path: Path, algorithm: str = "md5") -> Optional[str]
         return None
 
 
-def calculate_directory_checksum(dir_path: Path, algorithm: str = "md5") -> Optional[str]:
+def calculate_directory_checksum(
+    dir_path: Path, algorithm: str = "md5"
+) -> Optional[str]:
     """
     Calculate combined checksum for all files in a directory.
 
@@ -65,7 +67,9 @@ def calculate_directory_checksum(dir_path: Path, algorithm: str = "md5") -> Opti
         return None
 
 
-def _extract_archive_to_temp(archive_path: Path) -> Optional[tempfile.TemporaryDirectory]:
+def _extract_archive_to_temp(
+    archive_path: Path,
+) -> Optional[tempfile.TemporaryDirectory]:
     """
     Extract the given archive file (.zip, .tar, .gz, .tar.gz) to a temporary directory.
     Returns the TemporaryDirectory object if successful, or None if failed.
@@ -87,9 +91,11 @@ def _extract_archive_to_temp(archive_path: Path) -> Optional[tempfile.TemporaryD
             # .tar.gz or .tgz
             tar_mode = (
                 "r:gz"
-                if archive_path.suffix == ".gz"
-                or archive_path.suffix == ".tgz"
-                or archive_path.name.endswith(".tar.gz")
+                if (
+                    archive_path.suffix == ".gz"
+                    or archive_path.suffix == ".tgz"
+                    or archive_path.name.endswith(".tar.gz")
+                )
                 else "r"
             )
             with tarfile.open(archive_path, tar_mode) as tf:
@@ -138,10 +144,16 @@ def verify_backup(
         # Calculate source checksum
         if source.is_file():
             source_checksum = calculate_checksum(source, algorithm)
-            logger.debug("Calculated checksum for source file %s: %s", source, source_checksum)
+            logger.debug(
+                "Calculated checksum for source file %s: %s", source, source_checksum
+            )
         else:
             source_checksum = calculate_directory_checksum(source, algorithm)
-            logger.debug("Calculated checksum for source directory %s: %s", source, source_checksum)
+            logger.debug(
+                "Calculated checksum for source directory %s: %s",
+                source,
+                source_checksum,
+            )
 
         if not source_checksum:
             msg = f"Failed to calculate checksum for source: {source}"
@@ -152,16 +164,22 @@ def verify_backup(
         info_msg = ""
 
         # If backup is a compressed archive and source is a directory, extract and compare directory checksums
-        if backup.suffix in [".zip", ".tar", ".gz", ".tgz"] or backup.name.endswith(".tar.gz"):
+        if backup.suffix in [".zip", ".tar", ".gz", ".tgz"] or backup.name.endswith(
+            ".tar.gz"
+        ):
             if backup.stat().st_size > 0:
                 if source.is_dir():
                     temp_dir = _extract_archive_to_temp(backup)
                     if not temp_dir:
-                        msg = "Failed to extract backup archive for content verification."
+                        msg = (
+                            "Failed to extract backup archive for content verification."
+                        )
                         logger.error("Backup verification failed: %s", msg)
                         return False, source_checksum, None
                     extract_path = Path(temp_dir.name)
-                    backup_checksum = calculate_directory_checksum(extract_path, algorithm)
+                    backup_checksum = calculate_directory_checksum(
+                        extract_path, algorithm
+                    )
                     info_msg = "Backup is an archive. Checksums computed by extracting and comparing directory contents."
                     temp_dir.cleanup()
                     logger.info("Backup verification: %s", info_msg)
@@ -183,7 +201,9 @@ def verify_backup(
             logger.info("Backup verification: %s", info_msg)
         else:
             backup_checksum = calculate_directory_checksum(backup, algorithm)
-            info_msg = "Both source and backup are directories. Directory checksums compared."
+            info_msg = (
+                "Both source and backup are directories. Directory checksums compared."
+            )
             logger.info("Backup verification: %s", info_msg)
 
         if not backup_checksum:
@@ -257,14 +277,18 @@ def save_verification_result(
                     1 if verification_status else 0,
                 ),
             )
-            logger.debug("Saved verification result for backup history %s", backup_history_id)
+            logger.debug(
+                "Saved verification result for backup history %s", backup_history_id
+            )
             return True
     except Exception as e:
         logger.error("Error saving verification result: %s", e)
         return False
 
 
-def get_verification_result(backup_history_id: int, db_path: str = None) -> Optional[dict]:
+def get_verification_result(
+    backup_history_id: int, db_path: str = None
+) -> Optional[dict]:
     """
     Get verification result for a backup.
 

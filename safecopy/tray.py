@@ -4,8 +4,9 @@ System tray functionality for SafeCopy.
 
 import os
 import webbrowser
-from pystray import Icon, Menu, MenuItem
+
 from PIL import Image
+from pystray import Icon, Menu, MenuItem
 
 
 class SafeCopyTray:

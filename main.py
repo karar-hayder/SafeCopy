@@ -1,7 +1,7 @@
 import argparse
 import threading
 
-from safecopy import backup, config, scheduler, webui, advanced_scheduler
+from safecopy import advanced_scheduler, config, scheduler, webui
 from safecopy.tray import SafeCopyTray
 
 
@@ -14,7 +14,9 @@ def parse_args():
         default=10,
         help="Backup interval in minutes (default: 10)",
     )
-    parser.add_argument("--port", type=int, default=5000, help="Web UI port (default: 5000)")
+    parser.add_argument(
+        "--port", type=int, default=5000, help="Web UI port (default: 5000)"
+    )
     return parser.parse_args()
 
 

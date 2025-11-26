@@ -1,13 +1,13 @@
 import json
+import logging
 import os
 import shutil
 import tempfile
-import logging
 from typing import Any, Dict, List
 
 # --- .env/SECRET_KEY handling ---
 try:
-    from dotenv import load_dotenv, set_key, dotenv_values  # type: ignore
+    from dotenv import dotenv_values, load_dotenv, set_key  # type: ignore
 except ImportError:
 
     def load_dotenv(path=None) -> None:
@@ -75,13 +75,13 @@ logger = logging.getLogger(__name__)
 
 def init_config() -> None:
     """Initialize the configuration (database or JSON file) if it doesn't exist."""
-    from pathlib import Path
     import sys
+    from pathlib import Path
 
     if USE_DATABASE:
         # Initialize database and migrate from JSON if needed
-        from safecopy.db.migrate import check_and_migrate
         from safecopy.db.controller import DEFAULT_DB_PATH
+        from safecopy.db.migrate import check_and_migrate
 
         if not check_and_migrate(DEFAULT_DB_PATH):
             logger.error("Failed to initialize database, falling back to JSON")
@@ -189,9 +189,9 @@ def load_config_db() -> dict[str, Any]:
     """Load configuration from database and return in JSON-compatible format."""
     try:
         from safecopy.db.controller import (
-            get_mappings,
             get_backup_history,
             get_backup_settings,
+            get_mappings,
         )
 
         mappings: List[Dict[str, Any]] = get_mappings()
@@ -278,18 +278,21 @@ def save_config_db(data) -> bool:
     """Save configuration to database."""
     try:
         from safecopy.db.controller import (
-            get_mappings,
             add_mapping,
-            update_mapping,
             delete_mapping,
+            get_mappings,
             set_backup_settings,
+            update_mapping,
         )
 
         # Save mappings
         if "mappings" in data:
-            existing_mappings: Dict[Any, Dict[str, Any]] = {m["id"]: m for m in get_mappings()}
+            existing_mappings: Dict[Any, Dict[str, Any]] = {
+                m["id"]: m for m in get_mappings()
+            }
             existing_by_path: Dict[tuple[Any, Any], Any] = {
-                (m["source"], m["destination"]): m["id"] for m in existing_mappings.values()
+                (m["source"], m["destination"]): m["id"]
+                for m in existing_mappings.values()
             }
 
             # Process new/updated mappings
@@ -316,7 +319,9 @@ def save_config_db(data) -> bool:
                     )
 
             # Remove mappings that are no longer in the list
-            current_paths = {(m.get("source"), m.get("destination")) for m in data["mappings"]}
+            current_paths = {
+                (m.get("source"), m.get("destination")) for m in data["mappings"]
+            }
             for mapping_id, mapping in existing_mappings.items():
                 key = (mapping["source"], mapping["destination"])
                 if key not in current_paths:

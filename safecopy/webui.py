@@ -1,24 +1,33 @@
-import os
 import json
 import logging
+import os
 import shutil
 
-from flask import Flask, render_template, request, redirect, flash, jsonify, session, url_for
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_caching import Cache
 
+from safecopy import advanced_scheduler, notifications
+from safecopy.auth import is_auth_enabled, login_manager, verify_user
+from safecopy.backup import run_backup as backup_run_backup
 from safecopy.config import (
+    CONFIG_BACKUP,
+    CONFIG_FILE,
+    DEFAULT_CONFIG,
+    SECRET_KEY,
+    USE_DATABASE,
     load_config,
     save_config,
-    CONFIG_FILE,
-    CONFIG_BACKUP,
-    DEFAULT_CONFIG,
-    USE_DATABASE,
-    SECRET_KEY,
 )
-from safecopy.utils import get_available_drives, get_folder_size, format_size
-from safecopy.backup import run_backup as backup_run_backup
-from safecopy.auth import login_manager, verify_user, is_auth_enabled
-from safecopy import notifications, advanced_scheduler
+from safecopy.utils import format_size, get_available_drives, get_folder_size
 
 app = Flask(
     __name__,
@@ -62,11 +71,13 @@ def login():
         password = request.form.get("password")
 
         if verify_user(username, password):
-            from safecopy.db.controller import get_db_connection, DEFAULT_DB_PATH
+            from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
             with get_db_connection(DEFAULT_DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT id FROM web_auth WHERE username = ?", (username,))
+                cursor.execute(
+                    "SELECT id FROM web_auth WHERE username = ?", (username,)
+                )
                 row = cursor.fetchone()
                 user_id = row["id"] if row else 1
 
@@ -179,7 +190,9 @@ def save_mappings():
 
             if not save_config(config):
                 return (
-                    jsonify({"success": False, "error": "Failed to save configuration"}),
+                    jsonify(
+                        {"success": False, "error": "Failed to save configuration"}
+                    ),
                     500,
                 )
 
@@ -196,10 +209,8 @@ def delete_mapping_route():
     if auth_check:
         return auth_check
     if USE_DATABASE:
-        from safecopy.db.controller import (
-            get_mappings as db_get_mappings,
-            delete_mapping as db_delete_mapping,
-        )
+        from safecopy.db.controller import delete_mapping as db_delete_mapping
+        from safecopy.db.controller import get_mappings as db_get_mappings
 
         try:
             mapping_id = int(request.form.get("id", request.form.get("index", -1)))
@@ -285,7 +296,9 @@ def run_backup():
                 {
                     "success": False,
                     "error": "All backups failed",
-                    "details": "\n".join([f"{r['source']}: {r['error']}" for r in results]),
+                    "details": "\n".join(
+                        [f"{r['source']}: {r['error']}" for r in results]
+                    ),
                 }
             )
         elif len(successful_backups) < len(results):
@@ -294,12 +307,17 @@ def run_backup():
                     "success": True,
                     "message": "Some backups completed successfully",
                     "details": "\n".join(
-                        [f"{r['source']}: {r.get('message', r.get('error'))}" for r in results]
+                        [
+                            f"{r['source']}: {r.get('message', r.get('error'))}"
+                            for r in results
+                        ]
                     ),
                 }
             )
         else:
-            return jsonify({"success": True, "message": "All backups completed successfully"})
+            return jsonify(
+                {"success": True, "message": "All backups completed successfully"}
+            )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -346,7 +364,9 @@ def folder_preview():
         folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
         size = get_folder_size(path)
         size_formatted = format_size(size)
-        return jsonify({"files": sorted(files), "folders": sorted(folders), "size": size_formatted})
+        return jsonify(
+            {"files": sorted(files), "folders": sorted(folders), "size": size_formatted}
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -355,7 +375,9 @@ def folder_preview():
 def get_backup_settings():
     """Get the current backup settings."""
     config = load_config()
-    settings_val = config.get("backup_settings", {"maxVersions": 3, "compression": "none"})
+    settings_val = config.get(
+        "backup_settings", {"maxVersions": 3, "compression": "none"}
+    )
     return jsonify({"success": True, "settings": settings_val})
 
 
@@ -372,7 +394,9 @@ def save_backup_settings():
 
             if not save_config(config):
                 return (
-                    jsonify({"success": False, "error": "Failed to save configuration"}),
+                    jsonify(
+                        {"success": False, "error": "Failed to save configuration"}
+                    ),
                     500,
                 )
 
@@ -489,7 +513,10 @@ def add_schedule():
             advanced_scheduler.setup_all_schedules()
             return jsonify({"success": True, "schedule_id": schedule_id})
         else:
-            return jsonify({"success": False, "error": "Failed to create schedule"}), 500
+            return (
+                jsonify({"success": False, "error": "Failed to create schedule"}),
+                500,
+            )
     except Exception as e:
         logger.error("Error adding schedule: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
@@ -529,7 +556,7 @@ def get_users():
         return auth_check
 
     try:
-        from safecopy.db.controller import get_db_connection, DEFAULT_DB_PATH
+        from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
         with get_db_connection(DEFAULT_DB_PATH) as conn:
             cursor = conn.cursor()
@@ -566,11 +593,21 @@ def create_user():
         password = data.get("password")
 
         if not username or not password:
-            return jsonify({"success": False, "error": "Username and password are required"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": "Username and password are required"}
+                ),
+                400,
+            )
 
         if len(password) < 6:
             return (
-                jsonify({"success": False, "error": "Password must be at least 6 characters"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Password must be at least 6 characters",
+                    }
+                ),
                 400,
             )
 
@@ -613,7 +650,12 @@ def change_password():
 
         if len(new_password) < 6:
             return (
-                jsonify({"success": False, "error": "New password must be at least 6 characters"}),
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "New password must be at least 6 characters",
+                    }
+                ),
                 400,
             )
 

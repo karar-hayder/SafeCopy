@@ -3,17 +3,18 @@ Migration utility to migrate data from JSON config to database.
 """
 
 import json
-import os
 import logging
+import os
+
+from safecopy.config import CONFIG_FILE
 from safecopy.db.controller import (
-    init_database,
-    add_mapping,
-    add_backup_history,
-    set_backup_settings,
-    get_mappings,
     DEFAULT_DB_PATH,
+    add_backup_history,
+    add_mapping,
+    get_mappings,
+    init_database,
+    set_backup_settings,
 )
-from safecopy.config import CONFIG_FILE, CONFIG_BACKUP, DEFAULT_CONFIG
 
 logger = logging.getLogger(__name__)
 

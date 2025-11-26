@@ -1,7 +1,6 @@
+import logging
 import os
 import string
-import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ def get_available_drives():
         # Filter to only existing directories
         drives = [d for d in drives if os.path.exists(d)]
 
-    logger.info(f"Detected available drives: {drives}")
+    logger.info("Detected available drives: %s", drives)
     return drives
 
 
@@ -38,7 +37,7 @@ def is_valid_path(path):
         # Check if path exists and is a directory
         return os.path.exists(path) and os.path.isdir(path)
     except Exception as e:
-        logger.error(f"Error checking path validity: {str(e)}")
+        logger.error("Error checking path validity: %s", str(e))
         return False
 
 
@@ -54,13 +53,13 @@ def get_folder_size(path):
     """
     total_size = 0
     try:
-        for dirpath, dirnames, filenames in os.walk(path):
+        for dirpath, _dirnames, filenames in os.walk(path):
             for filename in filenames:
                 file_path = os.path.join(dirpath, filename)
                 if os.path.exists(file_path) and os.path.isfile(file_path):
                     total_size += os.path.getsize(file_path)
     except Exception as e:
-        logger.error(f"Error calculating folder size: {str(e)}")
+        logger.error("Error calculating folder size: %s", str(e))
 
     return total_size
 

@@ -2,12 +2,13 @@
 Email notification module for SafeCopy.
 """
 
-import smtplib
 import logging
-from email.mime.text import MIMEText
+import smtplib
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional
-from safecopy.db.controller import get_db_connection, DEFAULT_DB_PATH
+
+from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
 logger = logging.getLogger(__name__)
 
