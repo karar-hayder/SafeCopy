@@ -1,7 +1,7 @@
 import argparse
 import threading
 
-from safecopy import advanced_scheduler, config, scheduler, webui
+from safecopy import advanced_scheduler, config, webui
 from safecopy.tray import SafeCopyTray
 
 
@@ -31,13 +31,9 @@ def main():
     # Falls back to interval-based if no advanced schedules are configured
     try:
         advanced_scheduler.start_advanced_scheduler()
-        # Also start legacy scheduler as fallback
-        scheduler.start(interval_minutes=args.interval)
     except Exception as e:
         logger = __import__("logging").getLogger(__name__)
-        logger.warning("Failed to start advanced scheduler, using legacy: %s", e)
-        scheduler.start(interval_minutes=args.interval)
-
+        logger.warning("Failed to start advanced scheduler: %s", e)
     # Create and start the system tray
     tray = SafeCopyTray(port=args.port)
     tray_thread = threading.Thread(target=tray.start, daemon=True)
