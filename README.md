@@ -1,37 +1,38 @@
 # SafeCopy
 
-SafeCopy is an automated backup tool that allows you to easily configure and schedule backups from source folders to destination drives.
+SafeCopy is an automated backup tool with a modern web UI designed for effortlessly configuring, scheduling, and monitoring backups from any source folder to your preferred destination.
 
 ## Features
 
-- Web-based user interface for easy configuration
-- Automated scheduled backups
-- Support for multiple backup mappings
-- Detailed backup logs and history
-- On-demand backup execution
-- Configurable backup intervals
-- System tray integration
-- File versioning with configurable retention
-- Backup compression options (none, zip, tar)
+- **Modern Web UI**: Intuitive dashboard for all backup operations and management
+- **Advanced Scheduling**: Flexible backup scheduling (interval, daily, weekly, monthly)
+- **Multiple Backup Mappings**: Support for many independent source–destination pairs
+- **Detailed Logs & History**: Rich backup logs, error handling, and visual history viewer
+- **On-Demand & Scheduled Execution**: Run backups instantly from the UI or let them run by schedule
+- **File Versioning**: Automatic retention of multiple backup versions per mapping
+- **Backup Compression**: Choose from: none, zip, or tar
+- **System Tray Integration**: Background operation and convenience controls
+- **Role-based Web Authentication**: Built-in user management and password protection *(since 0.3.0)*
+- **Database or File-backed Config**: Configuration auto-migrates from JSON to SQLite as needed
 
 ## Installation
 
-1. Clone this repository:
+1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/safecopy.git
+   git clone https://github.com/karar-hayder/SafeCopy.git
    cd safecopy
    ```
 
-2. Create a virtual environment and activate it:
+2. **Create and activate a virtual environment:**
 
    ```bash
    python -m venv .venv
-   .venv\Scripts\activate  # On Windows
-   source .venv/bin/activate  # On macOS/Linux
+   .venv\Scripts\activate  # (Windows)
+   source .venv/bin/activate  # (macOS/Linux)
    ```
 
-3. Install the required dependencies:
+3. **Install dependencies:**
 
    ```bash
    pip install -r requirements.txt
@@ -39,17 +40,17 @@ SafeCopy is an automated backup tool that allows you to easily configure and sch
 
 ## Usage
 
-### Starting the Application
+### Starting SafeCopy
 
-Run the application with default settings:
+Launch the app with default settings:
 
 ```bash
 python main.py
 ```
 
-### Command Line Options
+### Command-Line Options
 
-- `--interval`: Set the backup interval in minutes (default: 10)
+- `--interval`: Set backup interval in minutes (default: 10 for legacy interval mode; use the scheduler for advanced scheduling)
 - `--port`: Set the web UI port (default: 5000)
 
 Example:
@@ -58,33 +59,39 @@ Example:
 python main.py --interval 30 --port 8080
 ```
 
-### Web Interface
+### Accessing the Web UI
 
-Once the application is running, open your web browser and navigate to:
+After launch, open your browser and navigate to:
 
 ```bash
 http://localhost:5000
 ```
 
-### Adding Backup Mappings
+If you've enabled authentication/password protection, login with your configured user.
 
-1. In the web interface, enter the source folder path in the "Source Folder" field.
-2. Select the destination drive from the dropdown menu.
-3. Configure backup settings (compression, max versions).
-4. Click "Add Mapping" to save the configuration.
+### Creating Backup Mappings
+
+1. Go to the "Mappings" section of the dashboard.
+2. Click "Add Mapping": Specify the source folder, choose a destination drive, set compression and max versions.
+3. Save and optionally schedule your new mapping.
+
+### Scheduling Backups
+
+- **Flexible Scheduling**: Use the "Schedules" tab to add daily, weekly, monthly, or interval-based schedules for any mapping.
+- **Cancel or Edit Schedules**: All future backups update as you change the configuration.
 
 ### Running Backups
 
-- **Scheduled Backups**: The application automatically runs backups at the configured interval.
-- **Manual Backups**: Click the "Run Backup Now" button in the web interface or use the system tray menu to start a backup immediately.
+- **Manual**: Use the "Run Now" buttons per mapping in the dashboard.
+- **Scheduled**: All scheduled jobs run automatically, tracked and logged.
 
-### Viewing Backup History
+### Viewing Logs & History
 
-The "Recent Actions" section in the web interface displays the history of backup operations, including success and failure messages.
+- "Backup History" in the dashboard shows all recent actions, success/failure, duration, size, etc.
 
 ## Configuration
 
-The application configuration is stored in `config.json` in the following format:
+**SafeCopy** now primarily uses an SQLite database for all persistent data (mappings, schedules, logs, settings, users). If running in "legacy" mode, it will use `config.json` as follows:
 
 ```json
 {
@@ -106,49 +113,51 @@ The application configuration is stored in `config.json` in the following format
 }
 ```
 
+Most users will interact with configuration through the UI, not by editing files.
+
 ## Logs
 
-The application logs are stored in `safecopy.log` and include detailed information about backup operations, errors, and system events.
+Backup and system logs are found in `safecopy.log`. All jobs, errors, and events including backup sizes, durations, and results are available in the dashboard.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Distributed under the MIT License. See `LICENSE` for details.
 
 ## Development Roadmap
 
-### Version 0.1.0 (Completed)
+### v0.1.0 *(completed)*
 
-- ✅ Local folder-to-folder backup (manual or scheduled)
-- ✅ Local web UI (Flask) for configuration
-- ✅ Save settings to JSON
-- ✅ Basic logging
-- ✅ Auto-start in background
-- ✅ Backup history viewer
+- ✅ Folder-to-folder backup (manual/scheduled)
+- ✅ Basic Flask web UI
+- ✅ JSON-based configuration
+- ✅ Logging and background operation
+- ✅ Basic history viewer
 
-### Version 0.2.0 (Completed)
+### v0.2.0 *(completed)*
 
-- ✅ System tray icon
-- ✅ File versioning (keep last 3 versions)
-- ✅ Improved error handling and recovery
-- ✅ Backup compression options
+- ✅ System tray integration
+- ✅ File versioning (retention)
+- ✅ Better error reporting & recovery
+- ✅ Configurable backup compression
 
-### Version 0.3.0 (Completed)
+### v0.3.0 *(completed)*
 
-- ✅ Password protection for web UI
-- ✅ Advanced backup scheduling (daily, weekly, monthly)
-- ✅ Email notifications for backup status
-- ✅ Backup verification and integrity checks
+- ✅ **Web UI authentication & user management**
+- ✅ **Advanced scheduler:** daily/weekly/monthly/interval
+- ✅ **Email notifications on backup results**
+- ✅ **Backup verification:** integrity and checksums
 
-### Version 0.4.0
+### v0.4.0 *(in progress)*
 
-- 🔄 Unit tests for core modules
-- 🔄 Performance optimizations for large backups
-- 🔄 Backup encryption options
-- 🔄 Detailed backup statistics and reporting
+- 🔄 Unit tests for backup/schedule modules
+- 🔄 Optimizations for large-scale backups
+- 🔄 Backup encryption support
+- 🔄 Stats/reporting dashboard
 
-### Version 1.0.0
+### v1.0.0
 
-- 🔄 PyInstaller packaging for standalone executable
-- 🔄 Windows installer with Inno Setup
-- 🔄 Windows service mode
-- 🔄 Comprehensive documentation
+- 🔄 PyInstaller onefile packaging
+- 🔄 Windows system service/installer options
+- 🔄 Complete documentation
+
+Contributions and suggestions are very welcome!

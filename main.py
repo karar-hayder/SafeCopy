@@ -11,8 +11,8 @@ def parse_args():
     parser.add_argument(
         "--interval",
         type=int,
-        default=5,
-        help="Backup interval in minutes (default: 5)",
+        default=10,
+        help="Backup interval in minutes (default: 10)",
     )
     parser.add_argument("--port", type=int, default=5000, help="Web UI port (default: 5000)")
     return parser.parse_args()

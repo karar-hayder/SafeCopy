@@ -17,7 +17,7 @@ from safecopy.config import (
 )
 from safecopy.utils import get_available_drives, get_folder_size, format_size
 from safecopy.backup import run_backup as backup_run_backup
-from safecopy.auth import login_manager, verify_user, is_auth_enabled, User
+from safecopy.auth import login_manager, verify_user, is_auth_enabled
 from safecopy import notifications, advanced_scheduler
 
 app = Flask(
@@ -92,7 +92,7 @@ def logout():
 
 
 @app.route("/")
-def index():
+def index_route():
     """Render the dashboard page."""
     auth_check = check_auth_required()
     if auth_check:
@@ -101,7 +101,7 @@ def index():
 
 
 @app.route("/settings")
-def settings():
+def settings_route():
     """Render the settings page."""
     auth_check = check_auth_required()
     if auth_check:
@@ -421,15 +421,15 @@ def get_backup_history_route():
 
 
 @app.route("/email_settings", methods=["GET", "POST"])
-def email_settings():
+def email_settings_route():
     """Get or save email notification settings."""
     auth_check = check_auth_required()
     if auth_check:
         return auth_check
 
     if request.method == "GET":
-        settings = notifications.get_email_settings()
-        return jsonify({"success": True, "settings": settings or {}})
+        email_settings_val = notifications.get_email_settings()
+        return jsonify({"success": True, "settings": email_settings_val or {}})
     else:
         try:
             data = request.get_json()
