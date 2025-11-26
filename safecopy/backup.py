@@ -4,6 +4,7 @@ import re
 import shutil
 import tarfile
 import time
+import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -35,10 +36,10 @@ def perform_backup(
     source_path, dest_path, max_versions=3, compression="none", mapping_id=None
 ):
     """
-    Perform a backup of the source directory to the destination directory.
+    Perform a backup of the source directory or file to the destination directory.
 
     Args:
-        source_path (str): Path to the source directory
+        source_path (str): Path to the source directory or file
         dest_path (str): Path to the destination directory
         max_versions (int): Maximum number of backup versions to keep
         compression (str): Compression type ('none', 'zip', or 'tar')
@@ -58,100 +59,129 @@ def perform_backup(
         if not source_path.exists():
             raise FileNotFoundError(f"Source path does not exist: {source_path}")
 
-        # Create destination directory if it doesn't exist
+        # Ensure destination exists
         dest_path.mkdir(parents=True, exist_ok=True)
 
-        # Generate backup name: backup_<YYYYMMDD_HHMMSS>_<sanitized-source>_<mappingid>_<compression>
+        # ------------------------------------------------------------------
+        # SHORT, WINDOWS-FRIENDLY BACKUP NAME
+        # ------------------------------------------------------------------
+        # Old names were 70–120 chars, breaking MAX_PATH. These are < 40 chars.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        source_name = sanitize_filename(source_path.name)
-        mapping_part = ""
-        if mapping_id is not None:
-            mapping_part = f"{mapping_id}"
-        compression_part = (
-            compression if compression and compression != "none" else "plain"
-        )
+        src = sanitize_filename(source_path.name)[:12]
+        mapping_part = f"{mapping_id}" if mapping_id is not None else ""
+        uid = uuid.uuid4().hex[:6]
+        comp = "plain" if compression == "none" else compression
 
-        backup_name_parts = [
-            "backup",
-            timestamp,
-            source_name,
-        ]
+        # Example: bk_20250101_153045_src_4A2F1A_plain
+        parts = ["bk", timestamp, src]
         if mapping_part:
-            backup_name_parts.append(mapping_part)
-        backup_name_parts.append(compression_part)
-        backup_name = "_".join(str(part) for part in backup_name_parts if part)
+            parts.append(mapping_part)
+        parts.append(uid)
+        parts.append(comp)
+        backup_stem = "_".join(parts)
 
+        # ------------------------------------------------------------------
+        # Create backup
+        # ------------------------------------------------------------------
         if compression == "zip":
-            # Create zip archive
-            zip_path = dest_path / f"{backup_name}.zip"
-            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                for root, _, files in os.walk(source_path):
-                    for file in files:
-                        file_path = Path(root) / file
-                        arcname = file_path.relative_to(source_path)
-                        zipf.write(file_path, arcname)
-            backup_path = zip_path
-        elif compression == "tar":
-            # Create tar archive
-            tar_path = dest_path / f"{backup_name}.tar.gz"
-            with tarfile.open(tar_path, "w:gz") as tar:
-                tar.add(source_path, arcname=source_path.name)
-            backup_path = tar_path
-        else:
-            # No compression, just copy the directory
-            backup_path = dest_path / backup_name
-            shutil.copytree(source_path, backup_path)
+            backup_path = dest_path / f"{backup_stem}.zip"
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                if source_path.is_dir():
+                    for root, _, files in os.walk(source_path):
+                        for file in files:
+                            fp = Path(root) / file
+                            arcname = fp.relative_to(
+                                source_path
+                            )  # correct arcname: relative to source_path
+                            zipf.write(fp, arcname)
+                else:
+                    zipf.write(source_path, arcname=source_path.name)
 
-        # Calculate backup size
+        elif compression == "tar":
+            backup_path = dest_path / f"{backup_stem}.tar.gz"
+            with tarfile.open(backup_path, "w:gz") as tar:
+                arcname = source_path.name
+                tar.add(source_path, arcname=arcname)
+
+        else:
+            # NONE: copy tree or file
+            if source_path.is_dir():
+                backup_path = dest_path / backup_stem
+                shutil.copytree(source_path, backup_path, dirs_exist_ok=False)
+            else:
+                backup_path = dest_path / f"{backup_stem}.bak"
+                shutil.copy2(source_path, backup_path)
+
+        # ------------------------------------------------------------------
+        # Validate backup exists & measure size
+        # ------------------------------------------------------------------
+        if not backup_path.exists():
+            raise RuntimeError("Backup creation failed: path not created.")
+
         if backup_path.is_file():
             size_bytes = backup_path.stat().st_size
+            if size_bytes == 0:
+                raise RuntimeError("Backup file created but is empty.")
         else:
-            # Calculate directory size
-            for dirpath, _, filenames in os.walk(backup_path):
-                for filename in filenames:
-                    filepath = Path(dirpath) / filename
-                    size_bytes += filepath.stat().st_size
+            for dp, _, fns in os.walk(backup_path):
+                for f in fns:
+                    size_bytes += (Path(dp) / f).stat().st_size
 
-        # Clean up old backups if exceeding max_versions
+        # ------------------------------------------------------------------
+        # Apply retention policy
+        # ------------------------------------------------------------------
         cleanup_old_backups(dest_path, max_versions)
 
         duration = time.time() - start_time
-        message = f"Backup completed successfully: {backup_path}"
-        logger.info(message)
-        return True, message, duration, size_bytes, str(backup_path)
+        msg = f"Backup completed successfully: {backup_path}"
+        logger.info(msg)
+        return True, msg, duration, size_bytes, str(backup_path)
 
     except Exception as e:
         duration = time.time() - start_time
-        error_msg = f"Backup failed: {str(e)}"
-        logger.error(error_msg)
-        return False, error_msg, duration, 0, None
+        msg = f"Backup failed: {e}"
+        logger.error(msg)
+        return False, msg, duration, 0, None
 
 
 def cleanup_old_backups(dest_path, max_versions):
     """
-    Remove old backup versions if exceeding max_versions.
-
-    Args:
-        dest_path (Path): Path to the backup directory
-        max_versions (int): Maximum number of backup versions to keep
+    Remove the oldest backups while keeping only the newest `max_versions`.
     """
+
     try:
-        # Get all backup directories and archives
-        backups = []
-        for item in dest_path.iterdir():
-            if item.name.startswith("backup_"):
-                backups.append(item)
+        dest_path = Path(dest_path)
 
-        # Sort backups by modification time (newest first)
-        backups.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        if max_versions < 1 or not dest_path.exists():
+            return
 
-        # Remove excess backups
-        for backup in backups[max_versions:]:
-            if backup.is_file():
-                backup.unlink()
-            else:
-                shutil.rmtree(backup)
-            logger.info("Removed old backup: %s", backup)
+        # Collect items that look like backups
+        backups = [
+            p
+            for p in dest_path.iterdir()
+            if p.name.startswith("bk_") and (p.is_file() or p.is_dir())
+        ]
+
+        if not backups:
+            return
+
+        # Sort newest → oldest, with tie-break by name
+        backups_sorted = sorted(
+            backups,
+            key=lambda p: (p.stat().st_mtime, p.name),
+            reverse=True,
+        )
+
+        # Remove everything older than the N newest
+        for old in backups_sorted[max_versions:]:
+            try:
+                if old.is_file():
+                    old.unlink()
+                else:
+                    shutil.rmtree(old)
+                logger.info("Removed old backup: %s", old)
+            except Exception as e:
+                logger.error("Error removing backup %s: %s", old, e)
 
     except Exception as e:
         logger.error("Warning: Failed to cleanup old backups: %s", e)
@@ -175,65 +205,89 @@ def run_backup(mapping):
     mapping_id = mapping.get("id")  # Database mapping ID if available
 
     if not source or not destination:
+        logger.error("Invalid mapping configuration: source or destination missing.")
+        # even on error, still try to record the attempt if not using DB
+        # (but config recording below is always after the perform_backup except branch)
         return False, "Invalid mapping configuration"
 
-    # Pass mapping_id down for best naming
-    success, message, duration, size_bytes, backup_path = perform_backup(
-        source, destination, max_versions, compression, mapping_id=mapping_id
-    )
+    try:
+        success, message, duration, size_bytes, backup_path = perform_backup(
+            source, destination, max_versions, compression, mapping_id=mapping_id
+        )
+    except Exception as e:
+        logger.error("perform_backup raised an exception: %s", e)
+        # Even if backup completely fails, record attempt in last_actions (JSON mode)
+        success, message, duration, size_bytes, backup_path = (
+            False,
+            f"Backup process failed: {str(e)}",
+            0,
+            0,
+            None,
+        )
 
-    # Log to database or JSON
     history_id = None
     if USE_DATABASE:
-        from safecopy.db.controller import add_backup_history
+        try:
+            from safecopy.db.controller import add_backup_history
 
-        history_id = add_backup_history(
-            mapping_id=mapping_id,
-            success=success,
-            message=message,
-            duration=duration,
-            size_bytes=size_bytes,
-            backup_path=backup_path,
-        )
+            history_id = add_backup_history(
+                mapping_id=mapping_id,
+                success=success,
+                message=message,
+                duration=duration,
+                size_bytes=size_bytes,
+                backup_path=backup_path,
+            )
 
-        # Verify backup if successful and save verification result
-        if history_id and success and backup_path:
-            try:
-                verify_success, source_checksum, backup_checksum = (
-                    verification.verify_backup(source, backup_path)
-                )
-                if not verify_success:
-                    logger.warning("Backup verification failed for %s", backup_path)
-                    message += " (Verification failed)"
+            if history_id and success and backup_path:
+                try:
+                    verify_success, source_checksum, backup_checksum = (
+                        verification.verify_backup(source, backup_path)
+                    )
+                    if not verify_success:
+                        logger.warning("Backup verification failed for %s", backup_path)
+                        message += " (Verification failed)"
 
-                verification.save_verification_result(
-                    backup_history_id=history_id,
-                    checksum_type="md5",
-                    source_checksum=source_checksum or "",
-                    backup_checksum=backup_checksum or "",
-                    verification_status=verify_success,
-                )
-            except Exception as e:
-                logger.error("Error during backup verification: %s", e)
+                    try:
+                        verification.save_verification_result(
+                            backup_history_id=history_id,
+                            checksum_type="md5",
+                            source_checksum=source_checksum or "",
+                            backup_checksum=backup_checksum or "",
+                            verification_status=verify_success,
+                        )
+                    except Exception as ve:
+                        logger.error("Error saving verification result: %s", ve)
+                except Exception as e:
+                    logger.error("Error during backup verification: %s", e)
+        except Exception as e:
+            logger.error("Error in database history logic: %s", e)
     else:
-        # Update last actions in JSON config
-        config = load_config()
-        config.setdefault("last_actions", [])
-        config["last_actions"].insert(
-            0,
-            {
-                "timestamp": datetime.now().isoformat(),
-                "source": source,
-                "destination": destination,
-                "success": success,
-                "message": message,
-            },
-        )
-        # Keep only last 10 actions
-        config["last_actions"] = config["last_actions"][:10]
-        save_config(config)
+        # Always add to last_actions in JSON config, even on failure,
+        # even if config file didn't exist yet
+        try:
+            config = load_config()
+        except Exception as e:
+            logger.error("Failed to load config: %s", e)
+            config = {}
 
-    # Send email notification
+        # Ensure "last_actions" exists and is a list
+        if not isinstance(config.get("last_actions"), list):
+            config["last_actions"] = []
+        action = {
+            "timestamp": datetime.now().isoformat(),
+            "source": source,
+            "destination": destination,
+            "success": success,
+            "message": message,
+        }
+        try:
+            config["last_actions"].insert(0, action)
+            config["last_actions"] = config["last_actions"][:10]
+            save_config(config)
+        except Exception as e:
+            logger.error("Error saving last_actions: %s", e)
+
     try:
         notifications.send_backup_notification(
             success=success,

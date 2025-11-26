@@ -69,7 +69,7 @@ DEFAULT_CONFIG = {
 }
 
 # Database support
-USE_DATABASE = True  # Set to False to use JSON instead
+USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() in ("1", "true", "yes", "on")
 logger = logging.getLogger(__name__)
 
 
