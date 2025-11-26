@@ -1,13 +1,15 @@
-import shutil
-import os
-import time
 import logging
-import glob
-from datetime import datetime
-from safecopy.config import load_config, save_config
-from pathlib import Path
-import zipfile
+import os
+import re
+import shutil
 import tarfile
+import time
+import zipfile
+from datetime import datetime
+from pathlib import Path
+
+from safecopy.config import USE_DATABASE, load_config, save_config
+from safecopy import verification, notifications
 
 # Configure logging
 logging.basicConfig(
@@ -18,7 +20,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def perform_backup(source_path, dest_path, max_versions=3, compression="none"):
+def sanitize_filename(name, max_length=40):
+    """
+    Sanitize a string to be used as a safe part of a filename.
+    Removes unsafe characters and trims the length.
+    """
+    name = re.sub(r"[^A-Za-z0-9_\-]", "_", name)
+    if len(name) > max_length:
+        name = name[:max_length]
+    return name
+
+
+def perform_backup(source_path, dest_path, max_versions=3, compression="none", mapping_id=None):
     """
     Perform a backup of the source directory to the destination directory.
 
@@ -27,10 +40,15 @@ def perform_backup(source_path, dest_path, max_versions=3, compression="none"):
         dest_path (str): Path to the destination directory
         max_versions (int): Maximum number of backup versions to keep
         compression (str): Compression type ('none', 'zip', or 'tar')
+        mapping_id (any, optional): Optional mapping ID (used in filename if provided)
 
     Returns:
-        bool: True if backup was successful, False otherwise
+        tuple: (success: bool, message: str, duration: float, size_bytes: int, backup_path: str)
     """
+    start_time = time.time()
+    backup_path = None
+    size_bytes = 0
+
     try:
         source_path = Path(source_path)
         dest_path = Path(dest_path)
@@ -41,9 +59,23 @@ def perform_backup(source_path, dest_path, max_versions=3, compression="none"):
         # Create destination directory if it doesn't exist
         dest_path.mkdir(parents=True, exist_ok=True)
 
-        # Generate backup name with timestamp
+        # Generate backup name: backup_<YYYYMMDD_HHMMSS>_<sanitized-source>_<mappingid>_<compression>
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_name = f"backup_{timestamp}"
+        source_name = sanitize_filename(source_path.name)
+        mapping_part = ""
+        if mapping_id is not None:
+            mapping_part = f"{mapping_id}"
+        compression_part = compression if compression and compression != "none" else "plain"
+
+        backup_name_parts = [
+            "backup",
+            timestamp,
+            source_name,
+        ]
+        if mapping_part:
+            backup_name_parts.append(mapping_part)
+        backup_name_parts.append(compression_part)
+        backup_name = "_".join(str(part) for part in backup_name_parts if part)
 
         if compression == "zip":
             # Create zip archive
@@ -66,16 +98,29 @@ def perform_backup(source_path, dest_path, max_versions=3, compression="none"):
             backup_path = dest_path / backup_name
             shutil.copytree(source_path, backup_path)
 
+        # Calculate backup size
+        if backup_path.is_file():
+            size_bytes = backup_path.stat().st_size
+        else:
+            # Calculate directory size
+            for dirpath, _, filenames in os.walk(backup_path):
+                for filename in filenames:
+                    filepath = Path(dirpath) / filename
+                    size_bytes += filepath.stat().st_size
+
         # Clean up old backups if exceeding max_versions
         cleanup_old_backups(dest_path, max_versions)
 
-        logger.info(f"Backup completed successfully: {backup_path}")
-        return True, f"Backup completed successfully: {backup_path}"
+        duration = time.time() - start_time
+        message = f"Backup completed successfully: {backup_path}"
+        logger.info(message)
+        return True, message, duration, size_bytes, str(backup_path)
 
     except Exception as e:
+        duration = time.time() - start_time
         error_msg = f"Backup failed: {str(e)}"
         logger.error(error_msg)
-        return False, error_msg
+        return False, error_msg, duration, 0, None
 
 
 def cleanup_old_backups(dest_path, max_versions):
@@ -102,10 +147,10 @@ def cleanup_old_backups(dest_path, max_versions):
                 backup.unlink()
             else:
                 shutil.rmtree(backup)
-            logger.info(f"Removed old backup: {backup}")
+            logger.info("Removed old backup: %s", backup)
 
     except Exception as e:
-        logger.error(f"Warning: Failed to cleanup old backups: {str(e)}")
+        logger.error("Warning: Failed to cleanup old backups: %s", e)
 
 
 def run_backup(mapping):
@@ -114,32 +159,87 @@ def run_backup(mapping):
 
     Args:
         mapping (dict): Mapping configuration containing source and destination paths
+            Can include 'id' if from database
+
+    Returns:
+        tuple: (success: bool, message: str)
     """
     source = mapping.get("source")
     destination = mapping.get("destination")
     max_versions = mapping.get("maxVersions", 3)
     compression = mapping.get("compression", "none")
+    mapping_id = mapping.get("id")  # Database mapping ID if available
 
     if not source or not destination:
         return False, "Invalid mapping configuration"
 
-    success, message = perform_backup(source, destination, max_versions, compression)
-
-    # Update last actions
-    config = load_config()
-    config["last_actions"].insert(
-        0,
-        {
-            "timestamp": datetime.now().isoformat(),
-            "source": source,
-            "destination": destination,
-            "success": success,
-            "message": message,
-        },
+    # Pass mapping_id down for best naming
+    success, message, duration, size_bytes, backup_path = perform_backup(
+        source, destination, max_versions, compression, mapping_id=mapping_id
     )
 
-    # Keep only last 10 actions
-    config["last_actions"] = config["last_actions"][:10]
-    save_config(config)
+    # Log to database or JSON
+    history_id = None
+    if USE_DATABASE:
+        from safecopy.db.controller import add_backup_history
+
+        history_id = add_backup_history(
+            mapping_id=mapping_id,
+            success=success,
+            message=message,
+            duration=duration,
+            size_bytes=size_bytes,
+            backup_path=backup_path,
+        )
+
+        # Verify backup if successful and save verification result
+        if history_id and success and backup_path:
+            try:
+                verify_success, source_checksum, backup_checksum = verification.verify_backup(
+                    source, backup_path
+                )
+                if not verify_success:
+                    logger.warning("Backup verification failed for %s", backup_path)
+                    message += " (Verification failed)"
+
+                verification.save_verification_result(
+                    backup_history_id=history_id,
+                    checksum_type="md5",
+                    source_checksum=source_checksum or "",
+                    backup_checksum=backup_checksum or "",
+                    verification_status=verify_success,
+                )
+            except Exception as e:
+                logger.error("Error during backup verification: %s", e)
+    else:
+        # Update last actions in JSON config
+        config = load_config()
+        config.setdefault("last_actions", [])
+        config["last_actions"].insert(
+            0,
+            {
+                "timestamp": datetime.now().isoformat(),
+                "source": source,
+                "destination": destination,
+                "success": success,
+                "message": message,
+            },
+        )
+        # Keep only last 10 actions
+        config["last_actions"] = config["last_actions"][:10]
+        save_config(config)
+
+    # Send email notification
+    try:
+        notifications.send_backup_notification(
+            success=success,
+            mapping_source=source,
+            mapping_destination=destination,
+            message=message,
+            duration=duration,
+            size_bytes=size_bytes,
+        )
+    except Exception as e:
+        logger.error("Error sending email notification: %s", e)
 
     return success, message

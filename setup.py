@@ -10,7 +10,7 @@ setup(
     description="An automated backup tool with web interface",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/karar-hayder/safecopy",
+    url="https://github.com/karar-hayder/SafeCopy",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

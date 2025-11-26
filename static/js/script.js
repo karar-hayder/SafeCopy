@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Attempt to get page elements only if they exist
     const sourceInput = document.getElementById('sourcePath');
     const destinationInput = document.getElementById('destPath');
     const addMappingBtn = document.getElementById('add-mapping');
@@ -25,12 +26,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Modal functions
     function showModal(modalElement) {
-        modalElement.style.display = 'flex';
+        if (typeof modalElement === 'string') {
+            modalElement = document.getElementById(modalElement);
+        }
+        if (modalElement) {
+            modalElement.style.display = 'flex';
+        }
     }
 
     function hideModal(modalElement) {
         if (typeof modalElement === 'string') {
-            // If a string ID is passed, get the element
             modalElement = document.getElementById(modalElement);
         }
         if (modalElement) {
@@ -38,8 +43,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Load existing mappings from server
+    window.showModal = showModal;
+    window.hideModal = hideModal;
+
+    // Only allow rendering if mappingList and backupSettings elements exist
     function loadMappings() {
+        if (!mappingList) {
+            // Mappings UI is not present on this page
+            return;
+        }
         fetch('/get_mappings')
             .then(response => response.json())
             .then(data => {
@@ -52,15 +64,18 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Load backup settings from server
     function loadBackupSettings() {
+        if (!maxVersionsInput || !compressionSelect) {
+            // Settings UI is not present on this page
+            return;
+        }
         fetch('/get_backup_settings')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     backupSettings = data.settings || backupSettings;
-                    maxVersionsInput.value = backupSettings.maxVersions;
-                    compressionSelect.value = backupSettings.compression;
+                    if (maxVersionsInput) maxVersionsInput.value = backupSettings.maxVersions;
+                    if (compressionSelect) compressionSelect.value = backupSettings.compression;
                 }
             })
             .catch(error => {
@@ -68,8 +83,10 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Render mappings in the UI
     function renderMappings() {
+        if (!mappingList) {
+            return;
+        }
         mappingList.innerHTML = '';
 
         if (mappings.length === 0) {
@@ -109,8 +126,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Add a new mapping
     function addMapping() {
+        if (!sourceInput || !destinationInput || !maxVersionsInput || !compressionSelect) return;
+
         const source = sourceInput.value.trim();
         const destination = destinationInput.value.trim();
         const maxVersions = parseInt(maxVersionsInput.value) || 3;
@@ -142,13 +160,12 @@ document.addEventListener('DOMContentLoaded', function () {
         addActionLogEntry(`Added mapping: ${source} → ${destination}`, 'success');
     }
 
-    // Save mappings to server
     function saveMappings() {
-        // Update backup settings
+        if (!maxVersionsInput || !compressionSelect) return;
+
         backupSettings.maxVersions = parseInt(maxVersionsInput.value) || 3;
         backupSettings.compression = compressionSelect.value;
 
-        // Save backup settings
         fetch('/save_backup_settings', {
             method: 'POST',
             headers: {
@@ -166,7 +183,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error saving backup settings:', error);
             });
 
-        // Save mappings
         fetch('/save_mappings', {
             method: 'POST',
             headers: {
@@ -188,19 +204,20 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Run backup
     function runBackup() {
-        if (mappings.length === 0) {
+        if (!mappings || !mappings.length) {
             addActionLogEntry('No mappings available. Please add mappings first.', 'warning');
             return;
         }
+        if (!backupProgressModal || !progressBar || !progressStatus) {
+            addActionLogEntry('Backup UI elements missing. Cannot run backup.', 'danger');
+            return;
+        }
 
-        // Show backup progress modal
         showModal(backupProgressModal);
         progressBar.style.width = '0%';
         progressStatus.textContent = 'Preparing backup...';
 
-        // Start backup process
         fetch('/run_backup', {
             method: 'POST',
             headers: {
@@ -225,7 +242,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressStatus.textContent = data.message || 'Backup completed successfully!';
                     addActionLogEntry(data.message || 'Backup completed successfully', 'success');
 
-                    // Close modal after a delay
                     setTimeout(() => {
                         hideModal(backupProgressModal);
                     }, 2000);
@@ -236,7 +252,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     progressStatus.textContent = `Error: ${data.error}`;
                     addActionLogEntry(`Backup failed: ${data.error}`, 'danger');
 
-                    // Add detailed error messages if available
                     if (data.details && Array.isArray(data.details)) {
                         data.details.forEach(detail => {
                             addActionLogEntry(detail, 'danger');
@@ -254,24 +269,31 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Add entry to action log
     function addActionLogEntry(message, type = 'info') {
+        // Only attempt to log if actionLog exists
+        if (!actionLog) {
+            return;
+        }
         const actionItem = document.createElement('div');
         actionItem.className = `action-item text-${type}`;
 
         const timestamp = new Date().toLocaleTimeString();
         actionItem.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
 
-        actionLog.insertBefore(actionItem, actionLog.firstChild);
+        if (actionLog.firstChild) {
+            actionLog.insertBefore(actionItem, actionLog.firstChild);
+        } else {
+            actionLog.appendChild(actionItem);
+        }
 
-        // Limit the number of log entries
         if (actionLog.children.length > 50) {
             actionLog.removeChild(actionLog.lastChild);
         }
     }
 
-    // Folder browser functions
     function browseFolder(type) {
+        if (!folderBrowserModal || !currentPathInput || !folderList) return;
+
         currentBrowseType = type;
         currentPath = '/';
         loadFolders();
@@ -279,6 +301,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function loadFolders() {
+        if (!folderBrowserModal || !currentPathInput || !folderList) return;
+
         fetch(`/browse_folders?path=${encodeURIComponent(currentPath)}`)
             .then(response => {
                 if (!response.ok) {
@@ -295,7 +319,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentPathInput.value = currentPath || '/';
                 folderList.innerHTML = '';
 
-                // Add drives if at root
                 if (currentPath === '/' || currentPath === '') {
                     if (data.drives && data.drives.length > 0) {
                         data.drives.forEach(drive => {
@@ -310,14 +333,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         });
                     }
                 } else {
-                    // Add parent directory
                     const parentItem = document.createElement('div');
                     parentItem.className = 'folder-item';
                     parentItem.textContent = '..';
                     parentItem.addEventListener('click', navigateUp);
                     folderList.appendChild(parentItem);
 
-                    // Add folders
                     if (data.folders && data.folders.length > 0) {
                         data.folders.forEach(folder => {
                             const folderItem = document.createElement('div');
@@ -355,6 +376,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function selectFolder() {
+        if (!sourceInput || !destinationInput || !folderBrowserModal) return;
+
         if (currentBrowseType === 'source') {
             sourceInput.value = currentPath;
         } else if (currentBrowseType === 'dest') {
@@ -363,14 +386,13 @@ document.addEventListener('DOMContentLoaded', function () {
         hideModal(folderBrowserModal);
     }
 
-    // Load mappings and settings when page loads
-    loadMappings();
-    loadBackupSettings();
+    // Conditionally load UI elements only if they exist
+    if (mappingList) loadMappings();
+    if (maxVersionsInput && compressionSelect) loadBackupSettings();
 
-    // Add initial action log entry
-    addActionLogEntry('Application started', 'info');
+    // Add initial action log entry if actionLog present
+    if (actionLog) addActionLogEntry('Application started', 'info');
 
-    // Make functions available globally
     window.browseFolder = browseFolder;
     window.addMapping = addMapping;
     window.saveMappings = saveMappings;
@@ -381,8 +403,8 @@ document.addEventListener('DOMContentLoaded', function () {
     window.hideModal = hideModal;
 
     // Add event listeners for close buttons
-    document.addEventListener('DOMContentLoaded', function () {
-        // Add event listeners for all close buttons
+    // (must wait for DOMContentLoaded so all modals are in DOM)
+    setTimeout(function () {
         const closeButtons = document.querySelectorAll('.close-btn');
         closeButtons.forEach(button => {
             button.addEventListener('click', function () {
@@ -392,5 +414,5 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
         });
-    });
+    }, 0);
 }); 

@@ -34,7 +34,7 @@ SafeCopy is an automated backup tool that allows you to easily configure and sch
 3. Install the required dependencies:
 
    ```bash
-   pip install flask flask-caching pystray pillow
+   pip install -r requirements.txt
    ```
 
 ## Usage
@@ -132,12 +132,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - ✅ Improved error handling and recovery
 - ✅ Backup compression options
 
-### Version 0.3.0 (In Progress)
+### Version 0.3.0 (Completed)
 
-- 🔄 Password protection for web UI
-- 🔄 Advanced backup scheduling (daily, weekly, monthly)
-- 🔄 Email notifications for backup status
-- 🔄 Backup verification and integrity checks
+- ✅ Password protection for web UI
+- ✅ Advanced backup scheduling (daily, weekly, monthly)
+- ✅ Email notifications for backup status
+- ✅ Backup verification and integrity checks
 
 ### Version 0.4.0
 
