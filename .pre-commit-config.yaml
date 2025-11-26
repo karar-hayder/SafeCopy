@@ -36,6 +36,16 @@ repos:
           - id: flake8
             additional_dependencies: ["flake8-bugbear", "flake8-comprehensions"]
             args: ["--ignore=E501,W503"]
+
+
+    -   repo: local
+        hooks:
+          - id: pytest
+            name: pytest with coverage
+            entry: python pytest_runner.py
+            language: system
+            pass_filenames: false
+
 # Exclude backups, database & virtualenv artifacts from hooks
 exclude: |
     ^(
