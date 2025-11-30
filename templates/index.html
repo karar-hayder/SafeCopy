@@ -26,7 +26,7 @@
           />
           <h1>SafeCopy Dashboard</h1>
           <div class="header-actions" id="headerActions" style="display: none">
-            <a href="{{ url_for('settings') }}" class="btn btn-secondary"
+            <a href="{{ url_for('settings_route') }}" class="btn btn-secondary"
               >Settings</a
             >
             <a href="{{ url_for('users') }}" class="btn btn-secondary">Users</a>
@@ -57,7 +57,7 @@
               <button class="btn btn-primary" onclick="runBackup()">
                 Run Backup Now
               </button>
-              <a href="{{ url_for('settings') }}" class="btn btn-success"
+              <a href="{{ url_for('settings_route') }}" class="btn btn-success"
                 >Configure Settings</a
               >
               <a href="{{ url_for('users') }}" class="btn btn-secondary"
@@ -76,7 +76,7 @@
               <p>Loading mappings...</p>
             </div>
             <a
-              href="{{ url_for('settings') }}"
+              href="{{ url_for('settings_route') }}"
               class="btn btn-sm btn-primary"
               style="margin-top: 10px"
               >View All Mappings</a
