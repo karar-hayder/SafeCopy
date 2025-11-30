@@ -150,7 +150,7 @@ Distributed under the MIT License. See `LICENSE` for details.
 ### v0.4.0 *(in progress)*
 
 - ✅ Unit tests for backup/schedule modules
-- 🔄 Optimizations for large-scale backups
+- ✅ Optimized for large-scale backups (plain backup is fast; zip and tar are library-limited in @safecopy/backup.py)
 - 🔄 Backup encryption support
 - 🔄 Stats/reporting dashboard
 
