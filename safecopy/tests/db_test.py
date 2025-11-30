@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from safecopy.db import (
+from safecopy.db.controller import (
     add_backup_history,
     add_mapping,
     cleanup_old_backup_history,

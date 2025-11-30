@@ -134,11 +134,15 @@ def create_desktop_shortcut() -> None:
     desktop = Path.home() / "Desktop"
 
     if sys.platform == "win32":
-        from win32com.client import Dispatch
+        try:
+            from win32com.client import Dispatch  # type: ignore
+        except ImportError:
+            print("win32com module not found, cannot create desktop shortcut.")
+            return
 
-        shortcut_path = os.path.join(desktop, "SafeCopy.lnk")
+        shortcut_path = desktop / "SafeCopy.lnk"
         shell = Dispatch("WScript.Shell")
-        shortcut = shell.CreateShortCut(shortcut_path)
+        shortcut = shell.CreateShortCut(str(shortcut_path))
         shortcut.Targetpath = "cmd"
         shortcut.Arguments = "/c start http://localhost:5000"
         shortcut.WorkingDirectory = str(Path.home())

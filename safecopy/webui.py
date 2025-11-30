@@ -17,7 +17,7 @@ from flask_caching import Cache
 
 from safecopy import advanced_scheduler, notifications
 from safecopy.auth import is_auth_enabled, login_manager, verify_user
-from safecopy.backup import run_backup as backup_run_backup
+from safecopy.backup import run_backups_parallel
 from safecopy.config import (
     CONFIG_BACKUP,
     CONFIG_FILE,
@@ -64,7 +64,7 @@ def check_auth_required():
 def login():
     """Login page using session."""
     if not is_auth_enabled():
-        return redirect(url_for("index"))
+        return redirect(url_for("index_route"))
 
     if request.method == "POST":
         username = request.form.get("username")
@@ -85,7 +85,7 @@ def login():
             session["username"] = username
             session["user_id"] = user_id
             flash("Logged in successfully", "success")
-            next_page = request.args.get("next") or url_for("index")
+            next_page = request.args.get("next") or url_for("index_route")
             return redirect(next_page)
         else:
             flash("Invalid username or password", "danger")
@@ -249,12 +249,12 @@ def delete_mapping_route():
         else:
             flash("Invalid mapping index.", "danger")
 
-    return redirect("/")
+    return redirect(url_for("index_route"))
 
 
 @app.route("/run_backup", methods=["POST"])
 def run_backup():
-    """Run all configured backups present in received 'mappings'."""
+    """Run all configured backups present in received 'mappings' using safecopy.backup.run_backups_parallel()."""
     auth_check = check_auth_required()
     if auth_check:
         return auth_check
@@ -265,52 +265,52 @@ def run_backup():
         if not mappings:
             return jsonify({"success": False, "error": "No backup mappings configured"})
 
-        results = []
-        for mapping in mappings:
-            source = mapping.get("source")
-            destination = mapping.get("destination")
-            max_versions = mapping.get("max_versions", 3)
-            compression = mapping.get("compression", "none")
+        # Prepare mappings for run_backups_parallel (convert UI keys to backup.py keys)
+        mapping_dicts = []
+        for m in mappings:
+            d = {
+                "source": m.get("source"),
+                "destination": m.get("destination"),
+                "maxVersions": m.get("max_versions", m.get("maxVersions", 3)),
+                "compression": m.get("compression", "none"),
+            }
+            # Optionally inject "id" or other keys if present
+            if "id" in m:
+                d["id"] = m["id"]
+            mapping_dicts.append(d)
 
-            try:
-                mapping_dict = {
-                    "source": source,
-                    "destination": destination,
-                    "maxVersions": max_versions,
-                    "compression": compression,
-                }
-                success, message = backup_run_backup(mapping_dict)
-                results.append(
-                    {
-                        "source": source,
-                        "success": success,
-                        "message": message if success else f"Backup failed: {message}",
-                    }
-                )
-            except Exception as e:
-                results.append({"source": source, "success": False, "error": str(e)})
+        results = run_backups_parallel(mapping_dicts)
+        response_rows = []
+        success_count = 0
+        for idx, (success, message) in enumerate(results):
+            mapping = mapping_dicts[idx]
+            row = {
+                "source": mapping.get("source"),
+                "destination": mapping.get("destination"),
+                "success": success,
+                "message": message,
+            }
+            if success:
+                success_count += 1
+            response_rows.append(row)
 
-        successful_backups = [r for r in results if r["success"]]
-        if not successful_backups:
+        if success_count == 0:
             return jsonify(
                 {
                     "success": False,
                     "error": "All backups failed",
                     "details": "\n".join(
-                        [f"{r['source']}: {r['error']}" for r in results]
+                        [f"{r['source']}: {r['message']}" for r in response_rows]
                     ),
                 }
             )
-        elif len(successful_backups) < len(results):
+        elif success_count < len(response_rows):
             return jsonify(
                 {
                     "success": True,
                     "message": "Some backups completed successfully",
                     "details": "\n".join(
-                        [
-                            f"{r['source']}: {r.get('message', r.get('error'))}"
-                            for r in results
-                        ]
+                        [f"{r['source']}: {r['message']}" for r in response_rows]
                     ),
                 }
             )

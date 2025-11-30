@@ -10,6 +10,11 @@ try:
 except ImportError:  # noqa: W0611  # Show a warning if pytest is missing for linters
     pytest = None  # type: ignore
 
+import json
+import pprint
+import sys
+import time
+
 
 @pytest.fixture
 def temp_source_dir():
@@ -44,8 +49,6 @@ def test_perform_backup_creates_backup_and_enforces_max_versions(
     """
     Test that perform_backup handles creation, retention, and naming for different compressions.
     """
-    import time
-
     logger = logging.getLogger(
         "test_perform_backup_creates_backup_and_enforces_max_versions"
     )
@@ -79,14 +82,22 @@ def test_perform_backup_creates_backup_and_enforces_max_versions(
         expected_is_dir = compression == "none"
         expected_is_file = not expected_is_dir
 
+        # Poll for backup path existence and content, to avoid race with file system delay.
         for retries in range(10):
             path_exists = backup_file.exists()
             if expected_is_dir and backup_file.is_dir():
-                if any(backup_file.iterdir()):
-                    break
+                try:
+                    # Might fail if directory is deleted in the middle
+                    if any(backup_file.iterdir()):
+                        break
+                except Exception:
+                    pass
             elif expected_is_file and backup_file.is_file():
-                if backup_file.stat().st_size > 0:
-                    break
+                try:
+                    if backup_file.stat().st_size > 0:
+                        break
+                except Exception:
+                    pass
             logger.warning(
                 "Backup path %s not ready (exists=%r, dir=%r, file=%r), attempt %d/10. Sleeping...",
                 str(backup_file),
@@ -151,8 +162,6 @@ def test_run_backup_adds_last_action_json(monkeypatch, tmp_path):
     Test that run_backup inserts last action into JSON config when USE_DATABASE is False via environment.
     This verifies that config.load_config()['last_actions'] is updated with a backup result.
     """
-    import sys
-
     config_path = tmp_path / "config.json"
     backup_path = tmp_path / "config.json.bak"
 
@@ -162,10 +171,10 @@ def test_run_backup_adds_last_action_json(monkeypatch, tmp_path):
         "safecopy.config.CONFIG_BACKUP", str(backup_path), raising=False
     )
 
-    if "safecopy.config" in sys.modules:
-        del sys.modules["safecopy.config"]
-    if "safecopy.backup" in sys.modules:
-        del sys.modules["safecopy.backup"]
+    # Ensure the modules are reloaded with fresh config for isolation.
+    for modname in ["safecopy.config", "safecopy.backup"]:
+        if modname in sys.modules:
+            del sys.modules[modname]
 
     import safecopy.config as config
 
@@ -176,8 +185,6 @@ def test_run_backup_adds_last_action_json(monkeypatch, tmp_path):
 
     # Write initial empty config
     with open(config_path, "w", encoding="utf-8") as f:
-        import json
-
         json.dump({"mappings": [], "last_actions": [], "backup_settings": {}}, f)
 
     # Prepare test source and destination directories/files
@@ -199,8 +206,6 @@ def test_run_backup_adds_last_action_json(monkeypatch, tmp_path):
     conf = config.load_config()
     assert "last_actions" in conf
     if not conf["last_actions"]:
-        import pprint
-
         pprint.pprint(conf)
     assert isinstance(conf["last_actions"], list)
     assert len(conf["last_actions"]) > 0

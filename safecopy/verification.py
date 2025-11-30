@@ -1,237 +1,265 @@
 """
 Backup verification and integrity checking module.
+Backups now contain a manifest containing per-file checksums.
+Verification reads and compares the manifest from source and backup.
 """
 
 import hashlib
+import json
 import logging
 import tarfile
-import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from safecopy.db.controller import DEFAULT_DB_PATH, get_db_connection
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_checksum(file_path: Path, algorithm: str = "md5") -> Optional[str]:
-    """
-    Calculate checksum for a file.
+# ---------------------------------------------------------------------------
+# NORMALIZATION FIX
+# ---------------------------------------------------------------------------
+def normalize_key(k: str) -> str:
+    """Normalize manifest paths to use forward slashes."""
+    return k.replace("\\", "/")
 
-    Args:
-        file_path: Path to file
-        algorithm: Hash algorithm ('md5', 'sha1', 'sha256')
 
-    Returns:
-        Hex digest of checksum or None if error
-    """
+# ---------------------------------------------------------------------------
+# Manifest Loading
+# ---------------------------------------------------------------------------
+def load_manifest_from_dir(dir_path: Path) -> Optional[Dict]:
+    manifest_path = dir_path / "manifest.json"
+    if not manifest_path.exists():
+        logger.warning("Manifest file not found in directory: %s", manifest_path)
+        return None
     try:
-        hash_obj = hashlib.new(algorithm)
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error("Error reading manifest.json from dir %s: %s", dir_path, e)
+        return None
+
+
+def load_manifest_from_zip(zip_path: Path) -> Optional[Dict]:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            with zf.open("manifest.json") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error("Error loading manifest.json from zip %s: %s", zip_path, e)
+        return None
+
+
+def load_manifest_from_tar(tar_path: Path) -> Optional[Dict]:
+
+    try:
+        mode = (
+            "r:gz"
+            if tar_path.suffix in [".gz", ".tgz"] or tar_path.name.endswith(".tar.gz")
+            else "r"
+        )
+        with tarfile.open(tar_path, mode) as tf:
+            try:
+                member = tf.getmember("manifest.json")
+            except KeyError:
+                logger.error("manifest.json not found in tar archive: %s", tar_path)
+                return None
+            f = tf.extractfile(member)
+            if not f:
+                logger.error(
+                    "Could not extract manifest.json from tar archive: %s", tar_path
+                )
+                return None
+            return json.load(f)
+    except Exception as e:
+        logger.error("Error loading manifest.json from tar %s: %s", tar_path, e)
+        return None
+
+
+def load_manifest(backup_path: Path) -> Optional[Dict]:
+    if backup_path.is_dir():
+        return load_manifest_from_dir(backup_path)
+    elif backup_path.suffix == ".zip":
+        return load_manifest_from_zip(backup_path)
+    elif backup_path.suffix in [".tar", ".gz", ".tgz"] or backup_path.name.endswith(
+        ".tar.gz"
+    ):
+        return load_manifest_from_tar(backup_path)
+    elif (
+        backup_path.is_file()
+        and (backup_path.parent / (backup_path.name + "_manifest.json")).exists()
+    ):
+        manifest_path = backup_path.parent / (backup_path.name + "_manifest.json")
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error("Error loading manifest %s: %s", manifest_path, e)
+    else:
+        logger.warning("No manifest found alongside backup: %s", backup_path)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Manifest Creation
+# ---------------------------------------------------------------------------
+def compute_source_manifest(source_path: Path) -> Optional[Dict]:
+    manifest = {}
+    try:
+        if source_path.is_file():
+            sz = source_path.stat().st_size
+            mtime = int(source_path.stat().st_mtime)
+            checksum = calculate_checksum(source_path)
+            manifest[source_path.name] = {
+                "size": sz,
+                "mtime": mtime,
+                "checksum": checksum,
+            }
+        else:
+            for path in sorted(source_path.rglob("*")):
+                if path.is_file():
+                    rel = str(path.relative_to(source_path))
+                    try:
+                        sz = path.stat().st_size
+                    except Exception:
+                        sz = None
+                    try:
+                        mtime = int(path.stat().st_mtime)
+                    except Exception:
+                        mtime = None
+                    try:
+                        checksum = calculate_checksum(path)
+                    except Exception:
+                        checksum = None
+
+                    # normalize source paths immediately
+                    manifest[normalize_key(rel)] = {
+                        "size": sz,
+                        "mtime": mtime,
+                        "checksum": checksum,
+                    }
+    except Exception as e:
+        logger.error("Error computing manifest for source: %s", e)
+        return None
+    return manifest
+
+
+# ---------------------------------------------------------------------------
+# Manifest Comparison (FIXED)
+# ---------------------------------------------------------------------------
+def compare_manifests(src_manifest: Dict, backup_manifest: Dict) -> Tuple[bool, str]:
+    """
+    Compare normalized manifests. Returns (success, message).
+    """
+
+    # Normalize backup manifest keys too
+    src_norm = {normalize_key(k): v for k, v in src_manifest.items()}
+    bkp_norm = {normalize_key(k): v for k, v in backup_manifest.items()}
+
+    src_files = set(src_norm.keys())
+    backup_files = set(bkp_norm.keys())
+
+    missing_in_backup = src_files - backup_files
+    extra_in_backup = backup_files - src_files
+    mismatches = []
+
+    for k in src_files & backup_files:
+        s = src_norm[k]
+        b = bkp_norm[k]
+        if s.get("size") != b.get("size") or s.get("checksum") != b.get("checksum"):
+            mismatches.append(
+                f"{k}: src(size={s.get('size')} MD5={s.get('checksum')}) "
+                f"!= backup(size={b.get('size')} MD5={b.get('checksum')})"
+            )
+
+    if missing_in_backup or extra_in_backup or mismatches:
+        msg = "Mismatch in backup verification:\n"
+        if missing_in_backup:
+            msg += f"Files missing in backup: {sorted(missing_in_backup)}\n"
+        if extra_in_backup:
+            msg += f"Extra files in backup: {sorted(extra_in_backup)}\n"
+        if mismatches:
+            msg += "File content mismatches:\n" + "\n".join(mismatches)
+        return False, msg
+
+    return True, "Backup manifest matches source manifest."
+
+
+# ---------------------------------------------------------------------------
+# Hashing
+# ---------------------------------------------------------------------------
+def calculate_checksum(file_path: Path, algorithm: str = "md5") -> Optional[str]:
+    try:
+        h = hashlib.new(algorithm)
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                hash_obj.update(chunk)
-        return hash_obj.hexdigest()
+                h.update(chunk)
+        return h.hexdigest()
     except Exception as e:
         logger.error("Error calculating checksum for %s: %s", file_path, e)
         return None
 
 
-def calculate_directory_checksum(
-    dir_path: Path, algorithm: str = "md5"
-) -> Optional[str]:
-    """
-    Calculate combined checksum for all files in a directory.
-
-    Args:
-        dir_path: Path to directory
-        algorithm: Hash algorithm ('md5', 'sha1', 'sha256')
-
-    Returns:
-        Hex digest of combined checksum or None if error
-    """
-    try:
-        hash_obj = hashlib.new(algorithm)
-        files = sorted(dir_path.rglob("*"))
-        for file_path in files:
-            if file_path.is_file():
-                # Include relative path in hash
-                rel_path = file_path.relative_to(dir_path)
-                hash_obj.update(str(rel_path).encode())
-                file_hash = calculate_checksum(file_path, algorithm)
-                if file_hash:
-                    hash_obj.update(file_hash.encode())
-        return hash_obj.hexdigest()
-    except Exception as e:
-        logger.error("Error calculating directory checksum for %s: %s", dir_path, e)
-        return None
-
-
-def _extract_archive_to_temp(
-    archive_path: Path,
-) -> Optional[tempfile.TemporaryDirectory]:
-    """
-    Extract the given archive file (.zip, .tar, .gz, .tar.gz) to a temporary directory.
-    Returns the TemporaryDirectory object if successful, or None if failed.
-    The caller is responsible for cleaning up the temporary directory.
-    """
-    try:
-        temp_dir = tempfile.TemporaryDirectory()
-        extract_path = Path(temp_dir.name)
-        # Handle zip files
-        if archive_path.suffix == ".zip":
-            with zipfile.ZipFile(archive_path, "r") as zf:
-                zf.extractall(extract_path)
-        # Handle .tar, .tar.gz, .tgz, .gz
-        elif (
-            archive_path.suffix in [".tar", ".gz"]
-            or archive_path.name.endswith(".tar.gz")
-            or archive_path.suffix == ".tgz"
-        ):
-            # .tar.gz or .tgz
-            tar_mode = (
-                "r:gz"
-                if (
-                    archive_path.suffix == ".gz"
-                    or archive_path.suffix == ".tgz"
-                    or archive_path.name.endswith(".tar.gz")
-                )
-                else "r"
-            )
-            with tarfile.open(archive_path, tar_mode) as tf:
-                tf.extractall(extract_path)
-        else:
-            logger.error("Unknown archive type for extraction: %s", archive_path)
-            temp_dir.cleanup()
-            return None
-        return temp_dir
-    except Exception as e:
-        logger.error("Failed to extract archive for verification: %s", e)
-        return None
-
-
+# ---------------------------------------------------------------------------
+# Verification Entry Point
+# ---------------------------------------------------------------------------
 def verify_backup(
     source_path: str,
     backup_path: str,
     algorithm: str = "md5",
-) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    Verify backup integrity by comparing checksums.
-    If backup is a zip/tar archive and source is a directory, extract and compare directory checksums.
+) -> Tuple[bool, str, Optional[str], Optional[str]]:
 
-    Args:
-        source_path: Path to source directory
-        backup_path: Path to backup location (file or directory or archive)
-        algorithm: Hash algorithm to use
+    src = Path(source_path)
+    bkp = Path(backup_path)
 
-    Returns:
-        Tuple of (success: bool, source_checksum: str, backup_checksum: str)
-    """
-    source = Path(source_path)
-    backup = Path(backup_path)
-
-    if not source.exists():
-        msg = f"Source path does not exist: {source}"
+    if not src.exists():
+        msg = f"Source path does not exist: {src}"
         logger.error("Backup verification failed: %s", msg)
-        return False, None, None
+        return False, msg, None, None
 
-    if not backup.exists():
-        msg = f"Backup path does not exist: {backup}"
+    if not bkp.exists():
+        msg = f"Backup path does not exist: {bkp}"
         logger.error("Backup verification failed: %s", msg)
-        return False, None, None
+        return False, msg, None, None
 
-    try:
-        # Calculate source checksum
-        if source.is_file():
-            source_checksum = calculate_checksum(source, algorithm)
-            logger.debug(
-                "Calculated checksum for source file %s: %s", source, source_checksum
-            )
-        else:
-            source_checksum = calculate_directory_checksum(source, algorithm)
-            logger.debug(
-                "Calculated checksum for source directory %s: %s",
-                source,
-                source_checksum,
-            )
+    # Load manifests
+    src_manifest = compute_source_manifest(src)
+    if src_manifest is None:
+        msg = "Failed to construct source manifest"
+        logger.error(msg)
+        return False, msg, None, None
 
-        if not source_checksum:
-            msg = f"Failed to calculate checksum for source: {source}"
-            logger.error("Backup verification failed: %s", msg)
-            return False, None, None
+    backup_manifest = load_manifest(bkp)
+    if backup_manifest is None:
+        msg = f"Could not locate manifest in backup: {bkp}"
+        logger.error(msg)
+        return False, msg, None, None
 
-        backup_checksum = None
-        info_msg = ""
+    # Normalize backup manifest as well
+    backup_manifest = {normalize_key(k): v for k, v in backup_manifest.items()}
 
-        # If backup is a compressed archive and source is a directory, extract and compare directory checksums
-        if backup.suffix in [".zip", ".tar", ".gz", ".tgz"] or backup.name.endswith(
-            ".tar.gz"
-        ):
-            if backup.stat().st_size > 0:
-                if source.is_dir():
-                    temp_dir = _extract_archive_to_temp(backup)
-                    if not temp_dir:
-                        msg = (
-                            "Failed to extract backup archive for content verification."
-                        )
-                        logger.error("Backup verification failed: %s", msg)
-                        return False, source_checksum, None
-                    extract_path = Path(temp_dir.name)
-                    backup_checksum = calculate_directory_checksum(
-                        extract_path, algorithm
-                    )
-                    info_msg = "Backup is an archive. Checksums computed by extracting and comparing directory contents."
-                    temp_dir.cleanup()
-                    logger.info("Backup verification: %s", info_msg)
-                else:
-                    # Fall back to comparing file hash if source is a file
-                    backup_checksum = calculate_checksum(backup, algorithm)
-                    info_msg = "Backup is a compressed archive, source is a file. Compared archive file checksum only."
-                    logger.info("Backup verification: %s", info_msg)
-            else:
-                msg = f"Backup file is empty: {backup}"
-                logger.error("Backup verification failed: %s", msg)
-                return False, source_checksum, None
-        elif backup.is_file():
-            backup_checksum = calculate_checksum(backup, algorithm)
-            if source.is_file():
-                info_msg = "Backup and source are both files."
-            else:
-                info_msg = "Warning: Source is a directory, but backup is a file."
-            logger.info("Backup verification: %s", info_msg)
-        else:
-            backup_checksum = calculate_directory_checksum(backup, algorithm)
-            info_msg = (
-                "Both source and backup are directories. Directory checksums compared."
-            )
-            logger.info("Backup verification: %s", info_msg)
+    # Compare
+    match, msg = compare_manifests(src_manifest, backup_manifest)
 
-        if not backup_checksum:
-            msg = f"Failed to calculate checksum for backup: {backup}"
-            logger.error("Backup verification failed: %s", msg)
-            return False, source_checksum, None
+    # Manifest digests
+    def manifest_digest(js):
+        try:
+            return hashlib.md5(
+                json.dumps(js, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+        except Exception:
+            return None
 
-        if source_checksum == backup_checksum:
-            msg = (
-                f"Backup verification succeeded: checksums match.\n"
-                f"Source checksum: {source_checksum}\n"
-                f"Backup checksum: {backup_checksum}"
-            )
-            logger.info(msg)
-            return True, source_checksum, backup_checksum
-        else:
-            msg = (
-                f"Backup verification failed: checksums do not match.\n"
-                f"Source checksum: {source_checksum}\n"
-                f"Backup checksum: {backup_checksum}"
-            )
-            logger.warning(msg)
-            return False, source_checksum, backup_checksum
+    src_md5 = manifest_digest(src_manifest)
+    bkp_md5 = manifest_digest(backup_manifest)
 
-    except Exception as e:
-        msg = f"Error verifying backup: {e}"
-        logger.error("Backup verification error: %s", msg)
-        return False, None, None
+    if match:
+        logger.info("Backup verification succeeded (per manifest): %s", msg)
+        return True, msg, src_md5, bkp_md5
+    else:
+        logger.warning("Backup verification failed: %s", msg)
+        return False, msg, src_md5, bkp_md5
 
 
 def save_verification_result(
@@ -240,6 +268,7 @@ def save_verification_result(
     source_checksum: str,
     backup_checksum: str,
     verification_status: bool,
+    verification_msg: str = "",
     db_path: str = None,
 ) -> bool:
     """
@@ -248,9 +277,10 @@ def save_verification_result(
     Args:
         backup_history_id: ID of backup history entry
         checksum_type: Type of checksum used
-        source_checksum: Source checksum
-        backup_checksum: Backup checksum
+        source_checksum: Source manifest checksum (digest)
+        backup_checksum: Backup manifest checksum (digest)
         verification_status: Whether verification passed
+        verification_msg: Human-readable verification result/summary
         db_path: Path to database file
 
     Returns:
@@ -308,7 +338,7 @@ def get_verification_result(
             cursor.execute(
                 """
                 SELECT id, checksum_type, source_checksum, backup_checksum,
-                       verification_status, verified_at
+                       verification_status, verification_msg, verified_at
                 FROM backup_verification
                 WHERE backup_history_id = ?
                 LIMIT 1
@@ -323,6 +353,7 @@ def get_verification_result(
                     "source_checksum": row["source_checksum"],
                     "backup_checksum": row["backup_checksum"],
                     "verification_status": bool(row["verification_status"]),
+                    "verification_msg": row.get("verification_msg", ""),
                     "verified_at": row["verified_at"],
                 }
     except Exception as e:

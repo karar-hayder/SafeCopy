@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Default database path
 DEFAULT_DB_PATH = "safecopy.db"
 DB_VERSION = 1
 
@@ -16,12 +15,6 @@ def get_db_connection(db_path: str = None):
     """
     Context manager for database connections.
     Establishes and returns a connection to the SQLite database at the given path.
-
-    Args:
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Yields:
-        sqlite3.Connection: Database connection
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -29,8 +22,10 @@ def get_db_connection(db_path: str = None):
     conn = None
     try:
         conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        # Ensure foreign key constraints are enforced on all connections
+        # Return a dictionary per row to allow attribute-style, key-style, and .get
+        conn.row_factory = lambda cursor, row: {
+            col[0]: row[idx] for idx, col in enumerate(cursor.description)
+        }
         conn.execute("PRAGMA foreign_keys=ON")
         yield conn
         conn.commit()
@@ -47,12 +42,7 @@ def get_db_connection(db_path: str = None):
 def init_database(db_path: str = None) -> bool:
     """
     Initialize the database with the required schema.
-
-    Args:
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        bool: True if initialization was successful, False otherwise
+    Returns True if initialization was successful, False otherwise.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -61,7 +51,6 @@ def init_database(db_path: str = None) -> bool:
         with get_db_connection(db_path) as conn:
             cursor = conn.cursor()
 
-            # Create mappings table
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS mappings (
@@ -113,7 +102,6 @@ def init_database(db_path: str = None) -> bool:
             """
             )
 
-            # Create backup_schedules table for advanced scheduling
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS backup_schedules (
@@ -129,7 +117,6 @@ def init_database(db_path: str = None) -> bool:
             """
             )
 
-            # Create email_settings table
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS email_settings (
@@ -147,7 +134,6 @@ def init_database(db_path: str = None) -> bool:
             """
             )
 
-            # Create backup_verification table
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS backup_verification (
@@ -162,8 +148,19 @@ def init_database(db_path: str = None) -> bool:
                 )
             """
             )
+            cursor.execute("PRAGMA table_info(backup_verification)")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "verification_msg" not in columns:
+                try:
+                    cursor.execute(
+                        "ALTER TABLE backup_verification ADD COLUMN verification_msg TEXT"
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to add verification_msg column to backup_verification: %s",
+                        e,
+                    )
 
-            # Create web_auth table for password protection
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS web_auth (
@@ -177,7 +174,6 @@ def init_database(db_path: str = None) -> bool:
             """
             )
 
-            # Check current database version and migrate if needed
             cursor.execute(
                 "SELECT version FROM database_version ORDER BY version DESC LIMIT 1"
             )
@@ -187,13 +183,11 @@ def init_database(db_path: str = None) -> bool:
             )
 
             if current_version < DB_VERSION:
-                # Migration from version 1 to 2
                 logger.info(
                     "Migrating database from version %s to %s",
                     current_version,
                     DB_VERSION,
                 )
-                # Tables are created with IF NOT EXISTS, so this is safe
                 cursor.execute(
                     """
                     INSERT OR REPLACE INTO database_version (version, updated_at) VALUES (?, CURRENT_TIMESTAMP)
@@ -208,7 +202,6 @@ def init_database(db_path: str = None) -> bool:
                     (DB_VERSION,),
                 )
 
-            # Initialize default settings if they don't exist
             default_settings = {"maxVersions": "3", "compression": "none"}
             for key, value in default_settings.items():
                 cursor.execute(
@@ -229,13 +222,7 @@ def init_database(db_path: str = None) -> bool:
 
 def get_mappings(db_path: str = None) -> List[Dict[str, Any]]:
     """
-    Get all backup mappings from the database.
-
-    Args:
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        List of mapping dictionaries
+    Retrieve all backup mappings from the database.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -277,14 +264,7 @@ def get_mappings(db_path: str = None) -> List[Dict[str, Any]]:
 
 def get_mapping(mapping_id: int, db_path: str = None) -> Optional[Dict[str, Any]]:
     """
-    Get a specific mapping by ID.
-
-    Args:
-        mapping_id: The ID of the mapping to retrieve
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        Mapping dictionary or None if not found
+    Retrieve a specific mapping by ID.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -331,17 +311,7 @@ def add_mapping(
 ) -> Optional[int]:
     """
     Add a new backup mapping to the database.
-
-    Args:
-        source: Source folder path
-        destination: Destination folder path
-        max_versions: Maximum number of backup versions to keep
-        compression: Compression type ('none', 'zip', 'tar')
-        enabled: Whether the mapping is enabled
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        ID of the created mapping, or None if creation failed
+    Returns ID of the created mapping or None if it fails.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -379,19 +349,7 @@ def update_mapping(
     db_path: str = None,
 ) -> bool:
     """
-    Update an existing backup mapping.
-
-    Args:
-        mapping_id: ID of the mapping to update
-        source: New source path (optional)
-        destination: New destination path (optional)
-        max_versions: New max versions (optional)
-        compression: New compression type (optional)
-        enabled: New enabled status (optional)
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        True if update was successful, False otherwise
+    Update an existing backup mapping. Returns True if updated, False otherwise.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -400,7 +358,6 @@ def update_mapping(
         with get_db_connection(db_path) as conn:
             cursor = conn.cursor()
 
-            # Build update query dynamically based on provided parameters
             updates = []
             params = []
 
@@ -421,7 +378,7 @@ def update_mapping(
                 params.append(1 if enabled else 0)
 
             if not updates:
-                return False  # No updates to make
+                return False
 
             updates.append("updated_at = CURRENT_TIMESTAMP")
             params.append(mapping_id)
@@ -432,9 +389,7 @@ def update_mapping(
             if cursor.rowcount > 0:
                 logger.info("Updated mapping %s", mapping_id)
                 return True
-            else:
-                logger.warning("Mapping %s not found for update", mapping_id)
-                return False
+            return False
 
     except Exception as e:
         logger.error("Error updating mapping %s: %s", mapping_id, e)
@@ -443,14 +398,7 @@ def update_mapping(
 
 def delete_mapping(mapping_id: int, db_path: str = None) -> bool:
     """
-    Delete a backup mapping from the database.
-
-    Args:
-        mapping_id: ID of the mapping to delete
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        True if deletion was successful, False otherwise
+    Delete a backup mapping from the database. Returns True if deleted, False otherwise.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -463,9 +411,7 @@ def delete_mapping(mapping_id: int, db_path: str = None) -> bool:
             if cursor.rowcount > 0:
                 logger.info("Deleted mapping %s", mapping_id)
                 return True
-            else:
-                logger.warning("Mapping %s not found for deletion", mapping_id)
-                return False
+            return False
 
     except Exception as e:
         logger.error("Error deleting mapping %s: %s", mapping_id, e)
@@ -483,20 +429,7 @@ def add_backup_history(
     db_path: str = None,
 ) -> Optional[int]:
     """
-    Add a backup history entry.
-
-    Args:
-        mapping_id: ID of the mapping (can be None for manual backups)
-        success: Whether the backup was successful
-        message: Backup result message
-        duration: Backup duration in seconds (optional)
-        size_bytes: Size of the backup in bytes (optional)
-        backup_path: Path to the backup location (optional)
-        timestamp: Custom timestamp (optional, defaults to current time)
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        ID of the created history entry, or None if creation failed
+    Add a backup history entry. Returns the ID of the new entry or None if it fails.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -520,9 +453,7 @@ def add_backup_history(
                     timestamp or datetime.now().isoformat(),
                 ),
             )
-
             history_id = cursor.lastrowid
-            logger.debug("Added backup history entry %s", history_id)
             return history_id
 
     except Exception as e:
@@ -534,15 +465,7 @@ def get_backup_history(
     limit: int = 50, mapping_id: Optional[int] = None, db_path: str = None
 ) -> List[Dict[str, Any]]:
     """
-    Get backup history entries.
-
-    Args:
-        limit: Maximum number of entries to return
-        mapping_id: Filter by mapping ID (optional)
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        List of backup history dictionaries
+    Get backup history entries. Returns a list of backup history dictionaries.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -600,13 +523,7 @@ def get_backup_history(
 
 def get_backup_settings(db_path: str = None) -> Dict[str, str]:
     """
-    Get all backup settings.
-
-    Args:
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        Dictionary of settings (key-value pairs)
+    Retrieve all backup settings as key-value pairs.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -632,15 +549,7 @@ def get_backup_setting(
     key: str, default: str = None, db_path: str = None
 ) -> Optional[str]:
     """
-    Get a specific backup setting by key.
-
-    Args:
-        key: Setting key
-        default: Default value if setting doesn't exist
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        Setting value or default if not found
+    Retrieve a specific backup setting by key. Returns the value or default.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -662,15 +571,7 @@ def get_backup_setting(
 
 def set_backup_setting(key: str, value: str, db_path: str = None) -> bool:
     """
-    Set a backup setting.
-
-    Args:
-        key: Setting key
-        value: Setting value
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        True if setting was saved successfully, False otherwise
+    Set a backup setting. Returns True if successful, False otherwise.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -688,8 +589,6 @@ def set_backup_setting(key: str, value: str, db_path: str = None) -> bool:
             """,
                 (key, value),
             )
-
-            logger.debug("Set backup setting %s = %s", key, value)
             return True
 
     except Exception as e:
@@ -699,14 +598,7 @@ def set_backup_setting(key: str, value: str, db_path: str = None) -> bool:
 
 def set_backup_settings(settings: Dict[str, str], db_path: str = None) -> bool:
     """
-    Set multiple backup settings at once.
-
-    Args:
-        settings: Dictionary of settings (key-value pairs)
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        True if all settings were saved successfully, False otherwise
+    Set multiple backup settings at once. Returns True if all were set successfully.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -725,8 +617,6 @@ def set_backup_settings(settings: Dict[str, str], db_path: str = None) -> bool:
                 """,
                     (key, str(value)),
                 )
-
-            logger.debug("Set %d backup settings", len(settings))
             return True
 
     except Exception as e:
@@ -736,13 +626,7 @@ def set_backup_settings(settings: Dict[str, str], db_path: str = None) -> bool:
 
 def get_database_version(db_path: str = None) -> int:
     """
-    Get the current database version.
-
-    Args:
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        Database version number, or 0 if not found
+    Get the current database version. Returns version number or 0 if not found.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -766,14 +650,7 @@ def get_database_version(db_path: str = None) -> int:
 
 def cleanup_old_backup_history(days: int = 90, db_path: str = None) -> int:
     """
-    Remove backup history entries older than specified days.
-
-    Args:
-        days: Number of days to keep history
-        db_path: Path to the database file. If None, uses DEFAULT_DB_PATH.
-
-    Returns:
-        Number of entries deleted
+    Remove backup history entries older than specified days. Returns number deleted.
     """
     if db_path is None:
         db_path = DEFAULT_DB_PATH

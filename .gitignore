@@ -184,3 +184,4 @@ config.json*
 safecopy.log
 safecopy.db
 .devdbrc
+.pytest_tmp
