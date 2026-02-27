@@ -160,6 +160,8 @@ def get_mappings():
                     "maxVersions": mapping["maxVersions"],
                     "compression": mapping["compression"],
                     "enabled": mapping.get("enabled", True),
+                    "encrypted": mapping.get("encrypted", False),
+                    "uuid": mapping.get("uuid"),
                 }
             )
         return jsonify({"mappings": mappings_list})
@@ -169,6 +171,7 @@ def get_mappings():
         for idx, mapping in enumerate(config["mappings"]):
             mapping_copy = mapping.copy()
             mapping_copy["id"] = idx
+            mapping_copy["uuid"] = mapping.get("uuid", f"legacy-{idx}")
             mappings_with_ids.append(mapping_copy)
         return jsonify({"mappings": mappings_with_ids})
 
@@ -273,6 +276,10 @@ def run_backup():
                 "destination": m.get("destination"),
                 "maxVersions": m.get("max_versions", m.get("maxVersions", 3)),
                 "compression": m.get("compression", "none"),
+                "encrypted": m.get("encrypted", False),
+                "passwd_mode": m.get("passwd_mode", "none"),
+                "uuid": m.get("uuid"),
+                "name": m.get("name", f"{m.get('source')} to {m.get('destination')}"),
             }
             # Optionally inject "id" or other keys if present
             if "id" in m:

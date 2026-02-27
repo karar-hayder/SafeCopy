@@ -13,6 +13,7 @@ SafeCopy is an automated backup tool with a modern web UI designed for effortles
 - **Backup Compression**: Choose from: none, zip, or tar
 - **System Tray Integration**: Background operation and convenience controls
 - **Role-based Web Authentication**: Built-in user management and password protection *(since 0.3.0)*
+- **End-to-End Encryption**: AES-256-GCM encryption with chunking and magic header *(since 0.4.0)*
 - **Database or File-backed Config**: Configuration auto-migrates from JSON to SQLite as needed
 
 ## Installation
@@ -151,7 +152,7 @@ Distributed under the MIT License. See `LICENSE` for details.
 
 - ✅ Unit tests for backup/schedule modules
 - ✅ Optimized for large-scale backups (plain backup is fast; zip and tar are library-limited in @safecopy/backup.py)
-- 🔄 Backup encryption support
+- ✅ Backup encryption support
 - 🔄 Stats/reporting dashboard
 
 ### v1.0.0

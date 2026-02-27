@@ -14,6 +14,7 @@ from pathlib import Path
 
 from safecopy import notifications, verification
 from safecopy.config import USE_DATABASE, load_config, save_config
+from safecopy.cryptor import Cryptor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -252,6 +253,8 @@ def perform_backup(
     compression="none",
     mapping_id=None,
     verbose=False,
+    encrypted=False,
+    passwd_mode="none",
 ):
     """
     Perform a backup of the source directory or file to the destination directory.
@@ -513,7 +516,7 @@ def cleanup_old_backups(dest_path, max_versions):
         logger.error("Warning: Failed to cleanup old backups: %s", e)
 
 
-def run_backup(mapping):
+def run_backup(mapping, db_path=None):
     """
     Run a backup operation for a specific mapping.
     Returns (success: bool, message: str)
@@ -523,24 +526,93 @@ def run_backup(mapping):
     max_versions = mapping.get("maxVersions", 3)
     compression = mapping.get("compression", "none")
     mapping_id = mapping.get("id")
+    mapping_uuid = mapping.get("uuid")
+    mapping_name = mapping.get("name") or mapping.get("mapping_name")
+    if not mapping_name:
+        mapping_name = f"{source} to {destination}"
+    encrypted = mapping.get("encrypted", False)
+    source_checksum = None
+    backup_checksum = None
 
     if not source or not destination:
         logger.error("Invalid mapping configuration: source or destination missing.")
         return False, "Invalid mapping configuration"
 
+    start_time = time.time()
+
     try:
         success, message, duration, size_bytes, backup_path = perform_backup(
-            source, destination, max_versions, compression, mapping_id=mapping_id
+            source,
+            destination,
+            max_versions,
+            compression,
+            mapping_id=mapping_id,
+            encrypted=encrypted,
         )
+
+        if not success:
+            logger.error("perform_backup failed: %s", message)
+        else:
+            # 1. Verification (must happen BEFORE encryption)
+            verify_success = False
+            verify_msg = "Verification skipped"
+            source_checksum = None
+            backup_checksum = None
+
+            try:
+                verify_success, verify_msg, source_checksum, backup_checksum = (
+                    verification.verify_backup(source, backup_path)
+                )
+                if not verify_success:
+                    logger.warning(
+                        "Backup verification failed for %s: %s", backup_path, verify_msg
+                    )
+                    message += f" (Verification failed: {verify_msg})"
+            except Exception as e:
+                logger.error("Error during backup verification: %s", e)
+                verify_msg = f"Verification error: {str(e)}"
+
+            # 2. Encryption (if enabled)
+            if encrypted:
+                try:
+                    cryptor = Cryptor(
+                        mapping_uuid=mapping_uuid, mapping_name=mapping_name
+                    )
+                    if not cryptor.has_key:
+                        logger.info(
+                            "No key found for mapping %s, generating one...",
+                            mapping_name,
+                        )
+                        cryptor.key = Cryptor.generate_random_key()
+                        # cryptor.encrypt will call _set_key_in_keyring
+
+                    encrypted_backup_path = cryptor.encrypt(backup_path)
+                    if encrypted_backup_path:
+                        backup_path = encrypted_backup_path
+                        try:
+                            size_bytes = os.path.getsize(backup_path)
+                        except Exception:
+                            pass
+                        message = f"Backup completed and encrypted: {backup_path}"
+                    else:
+                        success = False
+                        message = "Encryption failed at the cryptor level"
+                except Exception as e:
+                    logger.error("Encryption failed for %s: %s", backup_path, e)
+                    success = False
+                    message = f"Encryption failed: {str(e)}"
+
+            # 3. Cleanup (only if everything succeeded)
+            if success:
+                cleanup_old_backups(destination, max_versions)
+
     except Exception as e:
-        logger.error("perform_backup raised an exception: %s", e)
-        success, message, duration, size_bytes, backup_path = (
-            False,
-            f"Backup process failed: {str(e)}",
-            0,
-            0,
-            None,
-        )
+        logger.error("run_backup raised an exception: %s", e)
+        success = False
+        message = f"Backup process failed: {str(e)}"
+        duration = time.time() - start_time
+        size_bytes = 0
+        backup_path = None
 
     history_id = None
     if USE_DATABASE:
@@ -554,30 +626,22 @@ def run_backup(mapping):
                 duration=duration,
                 size_bytes=size_bytes,
                 backup_path=backup_path,
+                db_path=db_path,
             )
 
-            if history_id and success and backup_path:
+            if history_id and success:
                 try:
-                    verify_success, verify_msg, source_checksum, backup_checksum = (
-                        verification.verify_backup(source, backup_path)
+                    verification.save_verification_result(
+                        backup_history_id=history_id,
+                        checksum_type="md5",
+                        source_checksum=source_checksum,
+                        backup_checksum=backup_checksum,
+                        verification_status=verify_success,
+                        verification_msg=verify_msg,
+                        db_path=db_path,
                     )
-                    if not verify_success:
-                        logger.warning("Backup verification failed for %s", backup_path)
-                        message += " (Verification failed)"
-
-                    try:
-                        verification.save_verification_result(
-                            backup_history_id=history_id,
-                            checksum_type="md5",
-                            source_checksum=source_checksum,
-                            backup_checksum=backup_checksum,
-                            verification_status=verify_success,
-                            verification_msg=verify_msg,
-                        )
-                    except Exception as ve:
-                        logger.error("Error saving verification result: %s", ve)
-                except Exception as e:
-                    logger.error("Error during backup verification: %s", e)
+                except Exception as ve:
+                    logger.error("Error saving verification result: %s", ve)
         except Exception as e:
             logger.error("Error in database history logic: %s", e)
     else:

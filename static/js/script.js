@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let backupSettings = {
     maxVersions: 3,
     compression: "none",
+    encrypted: false,
   };
   let currentBrowseType = "";
   let currentPath = "";
@@ -78,6 +79,9 @@ document.addEventListener("DOMContentLoaded", function () {
             maxVersionsInput.value = backupSettings.maxVersions;
           if (compressionSelect)
             compressionSelect.value = backupSettings.compression;
+          const encryptCheckbox = document.getElementById("encryptBackup");
+          if (encryptCheckbox)
+            encryptCheckbox.checked = backupSettings.encrypted || false;
         }
       })
       .catch((error) => {
@@ -108,6 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <div><strong>Destination:</strong> ${mapping.destination}</div>
                 <div><strong>Max Versions:</strong> ${mapping.max_versions || backupSettings.maxVersions}</div>
                 <div><strong>Compression:</strong> ${mapping.compression || backupSettings.compression}</div>
+                <div><strong>Encrypted:</strong> ${mapping.encrypted ? "Yes" : "No"}</div>
             `;
 
       const mappingActions = document.createElement("div");
@@ -145,6 +150,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const destination = destinationInput.value.trim();
     const maxVersions = parseInt(maxVersionsInput.value) || 3;
     const compression = compressionSelect.value;
+    const encryptCheckbox = document.getElementById("encryptBackup");
+    const encrypted = encryptCheckbox ? encryptCheckbox.checked : false;
 
     if (!source || !destination) {
       addActionLogEntry(
@@ -169,6 +176,7 @@ document.addEventListener("DOMContentLoaded", function () {
       destination: destination,
       max_versions: maxVersions,
       compression: compression,
+      encrypted: encrypted,
     });
 
     renderMappings();
@@ -180,6 +188,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     backupSettings.maxVersions = parseInt(maxVersionsInput.value) || 3;
     backupSettings.compression = compressionSelect.value;
+    const encryptCheckbox = document.getElementById("encryptBackup");
+    backupSettings.encrypted = encryptCheckbox
+      ? encryptCheckbox.checked
+      : false;
 
     fetch("/save_backup_settings", {
       method: "POST",

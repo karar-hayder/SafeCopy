@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -55,14 +56,17 @@ def init_database(db_path: str = None) -> bool:
                 """
                 CREATE TABLE IF NOT EXISTS mappings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
                     source TEXT NOT NULL,
                     destination TEXT NOT NULL,
                     max_versions INTEGER DEFAULT 3,
                     compression TEXT DEFAULT 'none',
                     enabled INTEGER DEFAULT 1,
+                    encrypted INTEGER DEFAULT 0,
+                    passwd_mode TEXT DEFAULT 'none',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(source, destination)
+                    UNIQUE(uuid, source, destination)
                 )
             """
             )
@@ -232,8 +236,7 @@ def get_mappings(db_path: str = None) -> List[Dict[str, Any]]:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, source, destination, max_versions, compression, enabled,
-                       created_at, updated_at
+                SELECT *
                 FROM mappings
                 ORDER BY created_at DESC
             """
@@ -245,11 +248,13 @@ def get_mappings(db_path: str = None) -> List[Dict[str, Any]]:
                 mappings.append(
                     {
                         "id": row["id"],
+                        "uuid": row["uuid"],
                         "source": row["source"],
                         "destination": row["destination"],
                         "maxVersions": row["max_versions"],
                         "compression": row["compression"],
                         "enabled": bool(row["enabled"]),
+                        "encrypted": bool(row["encrypted"]),
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
                     }
@@ -274,8 +279,7 @@ def get_mapping(mapping_id: int, db_path: str = None) -> Optional[Dict[str, Any]
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, source, destination, max_versions, compression, enabled,
-                       created_at, updated_at
+                SELECT *
                 FROM mappings
                 WHERE id = ?
             """,
@@ -286,11 +290,13 @@ def get_mapping(mapping_id: int, db_path: str = None) -> Optional[Dict[str, Any]
             if row:
                 return {
                     "id": row["id"],
+                    "uuid": row["uuid"],
                     "source": row["source"],
                     "destination": row["destination"],
-                    "maxVersions": row["max_versions"],
+                    "max_versions": row["max_versions"],
                     "compression": row["compression"],
                     "enabled": bool(row["enabled"]),
+                    "encrypted": bool(row["encrypted"]),
                     "created_at": row["created_at"],
                     "updated_at": row["updated_at"],
                 }
@@ -307,6 +313,8 @@ def add_mapping(
     max_versions: int = 3,
     compression: str = "none",
     enabled: bool = True,
+    encrypted: bool = False,
+    uuid_str: str = None,
     db_path: str = None,
 ) -> Optional[int]:
     """
@@ -321,10 +329,18 @@ def add_mapping(
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO mappings (source, destination, max_versions, compression, enabled)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO mappings (uuid, source, destination, max_versions, compression, enabled, encrypted)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-                (source, destination, max_versions, compression, 1 if enabled else 0),
+                (
+                    uuid_str or str(uuid.uuid4()),
+                    source,
+                    destination,
+                    max_versions,
+                    compression,
+                    1 if enabled else 0,
+                    1 if encrypted else 0,
+                ),
             )
 
             mapping_id = cursor.lastrowid
@@ -346,6 +362,7 @@ def update_mapping(
     max_versions: int = None,
     compression: str = None,
     enabled: bool = None,
+    encrypted: bool = None,
     db_path: str = None,
 ) -> bool:
     """
@@ -376,6 +393,9 @@ def update_mapping(
             if enabled is not None:
                 updates.append("enabled = ?")
                 params.append(1 if enabled else 0)
+            if encrypted is not None:
+                updates.append("encrypted = ?")
+                params.append(1 if encrypted else 0)
 
             if not updates:
                 return False

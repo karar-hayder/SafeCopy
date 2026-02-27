@@ -71,6 +71,7 @@ def migrate_json_to_db(json_path: str = None, db_path: str = None) -> bool:
                     max_versions=mapping.get("maxVersions", 3),
                     compression=mapping.get("compression", "none"),
                     enabled=True,
+                    encrypted=mapping.get("encrypted", False),
                     db_path=db_path,
                 )
                 if mapping_id:
