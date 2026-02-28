@@ -1,44 +1,13 @@
-from typing import List, Optional
+from typing import List
 
 from safecopy.db.models import EmailSettings
 from safecopy.db.repos.emailSettingsRepo import EmailSettingsRepo
-from safecopy.db.session import get_session
+from safecopy.db.services.baseService import BaseService
 
 
-class EmailSettingsService:
-    def create_settings(self, **kwargs) -> EmailSettings:
-        with get_session() as session:
-            settings = EmailSettings(**kwargs)
-            session.add(settings)
-            session.flush()
-            return settings
+class EmailSettingsService(BaseService):
+    def __init__(self):
+        super().__init__(EmailSettings, EmailSettingsRepo)
 
-    def get_all_settings(self) -> List[EmailSettings]:
-        with get_session() as session:
-            repo = EmailSettingsRepo(session)
-            return repo.get_all()
-
-    def get_settings(self, uuid: str) -> Optional[EmailSettings]:
-        with get_session() as session:
-            repo = EmailSettingsRepo(session)
-            return repo.get_by_uuid(uuid)
-
-    def update_settings(self, uuid: str, **kwargs) -> Optional[EmailSettings]:
-        with get_session() as session:
-            repo = EmailSettingsRepo(session)
-            settings = repo.get_by_uuid(uuid)
-            if settings:
-                for key, value in kwargs.items():
-                    if hasattr(settings, key):
-                        setattr(settings, key, value)
-                return settings
-            return None
-
-    def delete_settings(self, uuid: str) -> bool:
-        with get_session() as session:
-            repo = EmailSettingsRepo(session)
-            settings = repo.get_by_uuid(uuid)
-            if settings:
-                session.delete(settings)
-                return True
-            return False
+    def get_enabled(self) -> List[EmailSettings]:
+        return self.get_all(enabled=1)

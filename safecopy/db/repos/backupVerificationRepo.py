@@ -1,19 +1,14 @@
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy import select
 
 from safecopy.db.models import BackupVerification
+from safecopy.db.repos.baseRepo import BaseRepo
 
 
-class BackupVerificationRepo:
+class BackupVerificationRepo(BaseRepo):
     def __init__(self, session):
-        self.session = session
-
-    def get_all(self) -> List[BackupVerification]:
-        return list(self.session.scalars(select(BackupVerification)).all())
-
-    def get_by_uuid(self, uuid: str) -> Optional[BackupVerification]:
-        return self.session.get(BackupVerification, uuid)
+        super().__init__(session, BackupVerification)
 
     def get_by_history_uuid(self, history_uuid: str) -> List[BackupVerification]:
         stmt = select(BackupVerification).where(

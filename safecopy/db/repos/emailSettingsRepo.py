@@ -1,19 +1,14 @@
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy import select
 
 from safecopy.db.models import EmailSettings
+from safecopy.db.repos.baseRepo import BaseRepo
 
 
-class EmailSettingsRepo:
+class EmailSettingsRepo(BaseRepo):
     def __init__(self, session):
-        self.session = session
-
-    def get_all(self) -> List[EmailSettings]:
-        return list(self.session.scalars(select(EmailSettings)).all())
-
-    def get_by_uuid(self, uuid: str) -> Optional[EmailSettings]:
-        return self.session.get(EmailSettings, uuid)
+        super().__init__(session, EmailSettings)
 
     def get_enabled(self) -> List[EmailSettings]:
         stmt = select(EmailSettings).where(EmailSettings.enabled == 1)

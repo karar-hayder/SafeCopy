@@ -1,19 +1,14 @@
-from typing import List, Optional
+from typing import Optional
 
 from sqlalchemy import select
 
 from safecopy.db.models import BackupHistory
+from safecopy.db.repos.baseRepo import BaseRepo
 
 
-class BackupHistoryRepo:
+class BackupHistoryRepo(BaseRepo):
     def __init__(self, session):
-        self.session = session
-
-    def get_all(self) -> List[BackupHistory]:
-        return list(self.session.scalars(select(BackupHistory)).all())
-
-    def get_by_uuid(self, uuid: str) -> Optional[BackupHistory]:
-        return self.session.get(BackupHistory, uuid)
+        super().__init__(session, BackupHistory)
 
     def get_by_mapping_uuid(self, mapping_uuid: str) -> Optional[BackupHistory]:
         stmt = select(BackupHistory).where(BackupHistory.mapping_uuid == mapping_uuid)

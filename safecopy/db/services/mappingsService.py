@@ -1,44 +1,18 @@
-from typing import List, Optional
+from typing import Optional
 
 from safecopy.db.models import Mappings
 from safecopy.db.repos.mappingsRepo import MappingsRepo
-from safecopy.db.session import get_session
+from safecopy.db.services.baseService import BaseService
 
 
-class MappingsService:
-    def create_mapping(self, **kwargs) -> Mappings:
-        with get_session() as session:
-            mapping = Mappings(**kwargs)
-            session.add(mapping)
-            session.flush()
-            return mapping
+class MappingsService(BaseService):
+    def __init__(self):
+        super().__init__(Mappings, MappingsRepo)
 
-    def get_all_mappings(self) -> List[Mappings]:
-        with get_session() as session:
-            repo = MappingsRepo(session)
-            return repo.get_all()
-
-    def get_mapping(self, uuid: str) -> Optional[Mappings]:
-        with get_session() as session:
-            repo = MappingsRepo(session)
-            return repo.get_by_uuid(uuid)
-
-    def update_mapping(self, uuid: str, **kwargs) -> Optional[Mappings]:
-        with get_session() as session:
-            repo = MappingsRepo(session)
-            mapping = repo.get_by_uuid(uuid)
-            if mapping:
-                for key, value in kwargs.items():
-                    if hasattr(mapping, key):
-                        setattr(mapping, key, value)
-                return mapping
-            return None
-
-    def delete_mapping(self, uuid: str) -> bool:
-        with get_session() as session:
-            repo = MappingsRepo(session)
-            mapping = repo.get_by_uuid(uuid)
-            if mapping:
-                session.delete(mapping)
-                return True
-            return False
+    def get_by_source_and_destination(
+        self, source: str, destination: str
+    ) -> Optional[Mappings]:
+        self.logger.debug(
+            "Get mapping by source and destination %s %s", source, destination
+        )
+        return self.get_one(source=source, destination=destination)
