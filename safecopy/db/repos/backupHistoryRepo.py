@@ -7,8 +7,8 @@ from safecopy.db.repos.baseRepo import BaseRepo
 
 
 class BackupHistoryRepo(BaseRepo):
-    def __init__(self, session):
-        super().__init__(session, BackupHistory)
+    def __init__(self, session, model=BackupHistory):
+        super().__init__(session, model)
 
     def get_by_mapping_uuid(self, mapping_uuid: str) -> Optional[BackupHistory]:
         stmt = select(BackupHistory).where(BackupHistory.mapping_uuid == mapping_uuid)

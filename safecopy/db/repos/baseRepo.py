@@ -30,17 +30,15 @@ class BaseRepo:
         self, order_by="-created_at", page=1, page_size=10, **filters
     ) -> List[T]:
         order_by = asc(order_by) if not order_by.startswith("-") else desc(order_by[1:])
-        objs = None
+        stmt = select(self.model)
         if filters:
-            objs = self.session.scalars(
-                select(self.model).filter_by(**filters).order_by(order_by)
-            )
-        else:
-            objs = self.session.scalars(select(self.model).order_by(order_by))
+            stmt = stmt.filter_by(**filters)
+        stmt = stmt.order_by(order_by)
 
-        if page_size == 0:
-            return objs
-        return objs.limit(page_size).offset((page - 1) * page_size).all()
+        if page_size > 0:
+            stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+
+        return list(self.session.scalars(stmt).all())
 
     def get_one(self, **filters) -> Optional[T]:
         return self.session.scalars(select(self.model).filter_by(**filters)).first()

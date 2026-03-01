@@ -1,80 +1,107 @@
-from logging import DEBUG, FileHandler, Logger, StreamHandler, getLogger
-from typing import List, Optional, Type, TypeVar
+from logging import Logger, getLogger
+from typing import Any, List, Optional, Type, TypeVar
 
-from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from safecopy.db.repos.baseRepo import BaseRepo
 from safecopy.db.session import get_session
 
-T = TypeVar("T")
+ModelType = TypeVar("ModelType", bound=DeclarativeBase)
+CreateDTOType = TypeVar("CreateDTOType", bound=BaseModel)
+UpdateDTOType = TypeVar("UpdateDTOType", bound=BaseModel)
+ResponseDTOType = TypeVar("ResponseDTOType", bound=BaseModel)
 
 
 class BaseService:
-    def __init__(self, model_cls: Type[T], repo_cls: Type[BaseRepo]):
+    def __init__(self, model_cls: Type[ModelType], repo_cls: Type[BaseRepo]):
         self.model_cls = model_cls
         self.repo_cls = repo_cls
-        self.logger = self._set_logger(self.__class__.__name__)
+        self.logger: Logger = getLogger(
+            f"safecopy.db.services.{self.__class__.__name__}"
+        )
+        self.dto_cls: dict[str, Any] = {
+            "create": None,
+            "update": None,
+            "response": None,
+        }
 
-    def _set_logger(self, name: str) -> Logger:
-        logger = getLogger(f"safecopy.db.services.{name}")
-        logger.setLevel(DEBUG)
-        logger.addHandler(StreamHandler())
-        logger.propagate = False
-        logger.addHandler(FileHandler("safecopy.db.services.log"))
-        return logger
-
-    def _get_object_str(self, obj: T) -> str:
+    def _get_object_str(self, obj: ModelType) -> str:
         return f"{obj.__class__.__name__} {obj.uuid}"
-
-    def create(self, **kwargs) -> T:
-        with get_session() as session:
-            repo = self._repo(session)
-            obj = self.model_cls(**kwargs)
-            obj = repo.add(obj)
-            self.logger.info("Created %s", self._get_object_str(obj))
-            return obj
 
     def get_all(
         self, order_by="-created_at", page=1, page_size=10, **filters
-    ) -> List[T]:
+    ) -> List[ResponseDTOType | ModelType]:
         with get_session() as session:
             repo = self._repo(session)
+            objs = repo.get_all(order_by, page, page_size, **filters)
             self.logger.debug(
                 "Retrieved all %s with filters %s and order by %s",
                 self.model_cls.__name__,
                 filters,
                 order_by,
             )
-            if filters:
-                return list(repo.get_all(order_by, page, page_size, **filters))
-            return list(repo.get_all(order_by, page, page_size))
+            if self.dto_cls["response"]:
+                return [
+                    self.dto_cls["response"].model_validate(obj, from_attributes=True)
+                    for obj in objs
+                ]
+            return list(objs)
 
-    def get_one(self, **filters) -> Optional[T]:
+    def get_one(self, **filters) -> Optional[ResponseDTOType | ModelType]:
         with get_session() as session:
             repo = self._repo(session)
+            obj = repo.get_one(**filters)
             self.logger.debug(
                 "Retrieved one %s with filters %s", self.model_cls.__name__, filters
             )
-            return repo.get_one(**filters)
+            if obj and self.dto_cls["response"]:
+                return self.dto_cls["response"].model_validate(
+                    obj, from_attributes=True
+                )
+            return obj
 
-    def get_by_uuid(self, uuid: str) -> Optional[T]:
+    def get_by_uuid(self, uuid: str) -> Optional[ResponseDTOType | ModelType]:
         with get_session() as session:
             repo = self._repo(session)
+            obj = repo.get_by_uuid(uuid)
             self.logger.debug(
                 "Retrieved %s with uuid %s", self.model_cls.__name__, uuid
             )
-            return repo.get_by_uuid(uuid)
+            if obj and self.dto_cls["response"]:
+                return self.dto_cls["response"].model_validate(
+                    obj, from_attributes=True
+                )
+            return obj
 
-    def update(self, uuid: str, **kwargs) -> Optional[T]:
+    def create(self, dto: CreateDTOType) -> ModelType | ResponseDTOType:
+        with get_session() as session:
+            repo = self._repo(session)
+            obj = self.model_cls(**dto.model_dump(mode="python"))
+            obj = repo.add(obj)
+            self.logger.info("Created %s", self._get_object_str(obj))
+            if self.dto_cls["response"]:
+                return self.dto_cls["response"].model_validate(
+                    obj, from_attributes=True
+                )
+            return obj
+
+    def update(
+        self, uuid: str, dto: UpdateDTOType
+    ) -> Optional[ResponseDTOType | ModelType]:
         with get_session() as session:
             repo = self._repo(session)
             obj = repo.get_by_uuid(uuid)
             if obj:
-                for key, value in kwargs.items():
+                for key, value in dto.model_dump(mode="python").items():
                     if hasattr(obj, key):
                         setattr(obj, key, value)
                 repo.update(obj)
                 self.logger.info("Updated %s", self._get_object_str(obj))
+                if self.dto_cls["response"]:
+                    return self.dto_cls["response"].model_validate(
+                        obj, from_attributes=True
+                    )
                 return obj
             self.logger.debug("Object %s not found", uuid)
         return None

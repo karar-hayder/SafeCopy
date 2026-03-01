@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -27,8 +27,8 @@ class Mappings(Base):
     compression: Mapped[CompressionType] = mapped_column(
         Enum(CompressionType), default=CompressionType.NONE
     )
-    enabled: Mapped[int] = mapped_column(Integer, default=1)
-    encrypted: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    encrypted: Mapped[bool] = mapped_column(Boolean, default=False)
     passwd_mode: Mapped[PasswdMode] = mapped_column(
         Enum(PasswdMode), default=PasswdMode.NONE
     )
@@ -67,7 +67,7 @@ class BackupSchedules(Base):
     schedule_interval_type: Mapped[ScheduleIntervalType] = mapped_column(
         Enum(ScheduleIntervalType), nullable=True
     )
-    enabled: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class BackupVerification(Base):

@@ -3,5 +3,5 @@ from safecopy.db.repos.baseRepo import BaseRepo
 
 
 class MappingsRepo(BaseRepo):
-    def __init__(self, session):
-        super().__init__(session, Mappings)
+    def __init__(self, session, model=Mappings):
+        super().__init__(session, model)

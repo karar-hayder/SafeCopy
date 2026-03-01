@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 engine = create_engine(
-    "sqlite:///safecopy.db", connect_args={"check_same_thread": False}
+    "sqlite:///instance/safecopy.db", connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, expire_on_commit=False, bind=engine
