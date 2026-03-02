@@ -1,164 +1,122 @@
 # SafeCopy
 
-SafeCopy is an automated backup tool with a modern web UI designed for effortlessly configuring, scheduling, and monitoring backups from any source folder to your preferred destination.
+SafeCopy is a structured, architecture-driven backup system designed for reliability and cryptographic integrity. Unlike conventional backup tools, SafeCopy ensures that every backup is cryptographically verifiable, persistently audited, and structurally isolated from orchestration logic.
 
-## Features
+> **⚠️ Refactoring in progress.** The `main` branch is undergoing a major architecture overhaul (v0.5.0).
+> For the last stable release, use commit [`aed40f7e`](https://github.com/karar-hayder/SafeCopy/commit/aed40f7e9b77b22e346f55961ae8e36dfca5cefa).
 
-- **Modern Web UI**: Intuitive dashboard for all backup operations and management
-- **Advanced Scheduling**: Flexible backup scheduling (interval, daily, weekly, monthly)
-- **Multiple Backup Mappings**: Support for many independent source–destination pairs
-- **Detailed Logs & History**: Rich backup logs, error handling, and visual history viewer
-- **On-Demand & Scheduled Execution**: Run backups instantly from the UI or let them run by schedule
-- **File Versioning**: Automatic retention of multiple backup versions per mapping
-- **Backup Compression**: Choose from: none, zip, or tar
-- **System Tray Integration**: Background operation and convenience controls
-- **Role-based Web Authentication**: Built-in user management and password protection *(since 0.3.0)*
-- **End-to-End Encryption**: AES-256-GCM encryption with chunking and magic header *(since 0.4.0)*
-- **Database or File-backed Config**: Configuration auto-migrates from JSON to SQLite as needed
+## Design Principles
 
-## Installation
+- **Separation of Concerns**: Backup execution, manifest generation, integrity verification, and persistence are handled by independent, testable components.
+- **Integrity First**: Every backup artifact contains a deterministic manifest used for post-backup validation.
+- **Production Awareness**: Atomic operations and failure semantics ensure that partially-written or corrupted artifacts are never treated as valid.
+- **Cryptographic Rigor**: Implementation of authenticated encryption (AES-256-GCM) with secure key management.
 
-1. **Clone the repository:**
+## System Overview
 
-   ```bash
-   git clone https://github.com/karar-hayder/SafeCopy.git
-   cd safecopy
-   ```
+```text
+BackupConfig (source, destination, compression, encryption, user_uuid, ...)
+        │
+        ▼
+BackupEngine                    — Atomic copy / compress / rename
+        │
+        ├── manifest.py         — Deterministic {size, mtime, MD5} embedded in backup
+        │
+        ▼
+runner.run_backup()             — Orchestration & Persistence
+        ├── BackupHistoryService     → SQLite (Audit log)
+        ├── verification.verify()   → Cryptographic comparison
+        └── BackupVerificationService → SQLite (Integrity record)
+```
 
-2. **Create and activate a virtual environment:**
+## Architecture
 
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate  # (Windows)
-   source .venv/bin/activate  # (macOS/Linux)
-   ```
+### `safecopy/backup/`
 
-3. **Install dependencies:**
+| Module | Responsibility |
+|---|---|
+| `engine.py` | `BackupEngine` — Handles copy, ZIP, and TAR operations. Backups are written to temporary paths and **atomically renamed** upon completion to prevent partially-written artifacts from being treated as valid. |
+| `manifest.py` | Pure-function manifest generators; produces deterministic metadata for source reconstruction. |
+| `verification.py` | Independent verifier that compares source state against the embedded backup manifest. |
+| `runner.py` | Central orchestrator linking the engine to the DB history and verification services. |
+| `cryptor.py` | AES-256-GCM authenticated encryption with a chunked format and `SFENC1.0` header. |
+| `dtos.py` | Pydantic data schemas; ensures strict validation between system layers. |
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+### `safecopy/db/`
 
-## Usage
+A robust persistence layer utilizing the **Repository and Service patterns** via SQLAlchemy ORM:
 
-### Starting SafeCopy
+| Layer | Contents |
+|---|---|
+| `models.py` | Domain entities: `Mappings`, `BackupHistory`, `BackupVerification`, `BackupSchedules`, `User`. |
+| `services/` | Business logic layer; handles CRUD, session management, and DTO mapping. |
+| `repos/` | Data access layer; isolates ORM-specific queries. |
+| `dtos/` | Pydantic models with field-level validators for strict data integrity. |
 
-Launch the app with default settings:
+## Integrity & Security
+
+### Deterministic Manifests
+
+Every backup produces a `manifest.json` containing deterministic per-file metadata:
+
+- **Byte size**
+- **Last modification timestamp**
+- **Cryptographic checksum** (MD5 for manifest speed; future path to SHA-256)
+
+### Failure Semantics
+
+The system is built with operational safety in mind:
+
+- **Atomic Renames**: Backup files only appear in the destination once fully written and closed.
+- **Audit Gating**: If backup execution fails, no `BackupHistory` success record is written, and temporary artifacts are purged.
+- **Verification Gating**: Backups are only marked as `SUCCESS` in the audit log after a post-backup integrity check passes. Encryption occurs post-verification.
+
+### Threat Model
+
+- **Local Hardening**: SafeCopy assumes a secure system keyring for key storage.
+- **Integrity Isolation**: Verification is independent of encryption state; manifests are checked before the encryption envelope is applied.
+- **Tamper Detection**: Post-write modification of the backup archive will trigger a `FAILED_VERIFICATION` status upon audit.
+
+## Design Decisions
+
+- **SQLite**: Selected for lightweight, zero-config embedded persistence suitable for desktop environments.
+- **AES-256-GCM**: Chosen for **authenticated encryption**, providing both confidentiality and authenticity in a single pass.
+- **Pydantic/SQLAlchemy**: Used to enforce a "typed" architecture, reducing runtime errors at the boundary of I/O and business logic.
+- **MD5**: Selected for high-throughput deterministic manifest generation where speed is prioritized over collision resistance.
+
+## Capabilities
+
+| Feature | Detail |
+|---|---|
+| Retention | Fully configurable versioning and automated pruning logic. |
+| Scheduling | CRON-like triggers (DAILY / WEEKLY / MONTHLY / INTERVAL) per mapping. |
+| Parallelism | Concurrency managed via `ThreadPoolExecutor` in the runner. |
+| Authentication | Role-based (USER / ADMIN) with session-managed protection. |
+| Encryption | Hardware-accelerated AES-GCM with system keyring integration. |
+| Notifications | SMTP-based alerts (Removed in v0.5.0; planned for v0.6.0) |
+
+## Restore (Planned)
+
+A structured restore pipeline is planned to reconstruct data from any backup artifact. The system will use embedded manifests as the single source of truth to ensure the target directory matches the captured source state exactly.
+
+## Testing & Verification
 
 ```bash
-python main.py
+pytest safecopy/tests/ -v
 ```
 
-### Command-Line Options
+SafeCopy maintains a high-quality test suite covering:
 
-- `--interval`: Set backup interval in minutes (default: 10 for legacy interval mode; use the scheduler for advanced scheduling)
-- `--port`: Set the web UI port (default: 5000)
+- **Engine Logic**: Validating all compression and atomic move paths.
+- **Integrity Layer**: Mocking source changes to ensure manifest comparison catches tampered files.
+- **Service Layer**: Thoroughly testing DB interactions, constraints, and DTO validation.
 
-Example:
+## Roadmap
 
-```bash
-python main.py --interval 30 --port 8080
-```
+SafeCopy follows a phased development strategy, evolving from foundational I/O toward a modular, formally verified system.
 
-### Accessing the Web UI
-
-After launch, open your browser and navigate to:
-
-```bash
-http://localhost:5000
-```
-
-If you've enabled authentication/password protection, login with your configured user.
-
-### Creating Backup Mappings
-
-1. Go to the "Mappings" section of the dashboard.
-2. Click "Add Mapping": Specify the source folder, choose a destination drive, set compression and max versions.
-3. Save and optionally schedule your new mapping.
-
-### Scheduling Backups
-
-- **Flexible Scheduling**: Use the "Schedules" tab to add daily, weekly, monthly, or interval-based schedules for any mapping.
-- **Cancel or Edit Schedules**: All future backups update as you change the configuration.
-
-### Running Backups
-
-- **Manual**: Use the "Run Now" buttons per mapping in the dashboard.
-- **Scheduled**: All scheduled jobs run automatically, tracked and logged.
-
-### Viewing Logs & History
-
-- "Backup History" in the dashboard shows all recent actions, success/failure, duration, size, etc.
-
-## Configuration
-
-**SafeCopy** now primarily uses an SQLite database for all persistent data (mappings, schedules, logs, settings, users). If running in "legacy" mode, it will use `config.json` as follows:
-
-```json
-{
-    "mappings": [
-        {
-            "source": "C:/path/to/source",
-            "destination": "D:/",
-            "maxVersions": 3,
-            "compression": "zip"
-        }
-    ],
-    "last_actions": [
-        "Backup from C:/path/to/source to D:/backup_20230429_123456 completed in 5.23 seconds. Size: 125.45 MB"
-    ],
-    "backup_settings": {
-        "maxVersions": 3,
-        "compression": "zip"
-    }
-}
-```
-
-Most users will interact with configuration through the UI, not by editing files.
-
-## Logs
-
-Backup and system logs are found in `safecopy.log`. All jobs, errors, and events including backup sizes, durations, and results are available in the dashboard.
+**[View Detailed Roadmap →](ROADMAP.md)**
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for details.
-
-## Development Roadmap
-
-### v0.1.0 *(completed)*
-
-- ✅ Folder-to-folder backup (manual/scheduled)
-- ✅ Basic Flask web UI
-- ✅ JSON-based configuration
-- ✅ Logging and background operation
-- ✅ Basic history viewer
-
-### v0.2.0 *(completed)*
-
-- ✅ System tray integration
-- ✅ File versioning (retention)
-- ✅ Better error reporting & recovery
-- ✅ Configurable backup compression
-
-### v0.3.0 *(completed)*
-
-- ✅ **Web UI authentication & user management**
-- ✅ **Advanced scheduler:** daily/weekly/monthly/interval
-- ✅ **Email notifications on backup results**
-- ✅ **Backup verification:** integrity and checksums
-
-### v0.4.0 *(in progress)*
-
-- ✅ Unit tests for backup/schedule modules
-- ✅ Optimized for large-scale backups (plain backup is fast; zip and tar are library-limited in @safecopy/backup.py)
-- ✅ Backup encryption support
-- 🔄 Stats/reporting dashboard
-
-### v1.0.0
-
-- 🔄 PyInstaller onefile packaging
-- 🔄 Windows system service/installer options
-- 🔄 Complete documentation
-
-Contributions and suggestions are very welcome!
+MIT License — see [`LICENSE`](LICENSE).
