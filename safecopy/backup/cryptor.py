@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import struct
-from typing import Literal
 
 import keyring
 from cryptography.hazmat.primitives import hashes
@@ -19,23 +18,19 @@ IV_SIZE = 12
 class Cryptor:
     def __init__(
         self,
-        mapping_name: str = None,
         mapping_uuid: str = None,
         key: str | bytes = None,
     ) -> None:
         if mapping_uuid is None:
             raise ValueError("Mapping UUID cannot be None")
-        if mapping_name is None:
-            raise ValueError("Mapping Name cannot be None")
 
-        self.mapping_name = mapping_name
         self.mapping_uuid = mapping_uuid
         self._key = None
         self.aesgcm = None
         self.aad = self.mapping_uuid.encode("utf-8")
 
         if mapping_uuid is not None and not key:
-            self._get_key_from_keyring()
+            self.key = self._get_key_from_keyring()
         elif key:
             self.key = key
 
@@ -44,7 +39,7 @@ class Cryptor:
         return self._key
 
     @key.setter
-    def key(self, value: str | bytes) -> None:
+    def key(self, value: str | bytes | None) -> None:
         if value is None:
             self._key = None
             self.aesgcm = None
@@ -64,7 +59,7 @@ class Cryptor:
 
     def _set_key_in_keyring(self) -> None:
         if not self.mapping_uuid or not self.key:
-            return
+            raise ValueError("Mapping UUID and key cannot be None")
         # keyring.set_password expects a string password
         key_str = base64.urlsafe_b64encode(self.key).decode()
         keyring.set_password("safecopy", self.mapping_uuid + "_key", key_str)
@@ -109,7 +104,7 @@ class Cryptor:
     def has_key(self) -> bool:
         return self.key is not None
 
-    def encrypt(self, file_name: str) -> str | Literal[False]:
+    def encrypt(self, file_name: str) -> dict[str, str | bool]:
         """
         Encrypts a file using AES-256-GCM encryption.
         Encrypts 5MB chunks with length prefixes.
@@ -138,7 +133,10 @@ class Cryptor:
                     os.remove(tmp_file_name_enc_path)
                 except Exception:
                     pass
-            return False
+            return {
+                "success": False,
+                "message": str(e),
+            }
 
         try:
             os.replace(tmp_file_name_enc_path, file_name_enc_path)
@@ -150,7 +148,10 @@ class Cryptor:
                 e,
                 exc_info=True,
             )
-            return False
+            return {
+                "success": False,
+                "message": str(e),
+            }
 
         try:
             os.remove(file_name)
@@ -159,9 +160,12 @@ class Cryptor:
                 "Failed to remove original file %s after encryption: %s", file_name, e
             )
 
-        return file_name_enc_path
+        return {
+            "success": True,
+            "backup_path": file_name_enc_path,
+        }
 
-    def decrypt(self, enc_file_name: str) -> str | Literal[False]:
+    def decrypt(self, enc_file_name: str) -> dict[str, str | bool]:
         """
         Decrypts a file using AES-256-GCM encryption.
         Expects magic header and chunk-length-prefixed format.
@@ -195,7 +199,10 @@ class Cryptor:
                     os.remove(file_name_dec_path)
                 except Exception:
                     pass
-            return False
+            return {
+                "success": False,
+                "message": str(e),
+            }
 
         try:
             os.remove(enc_file_name)
@@ -207,4 +214,7 @@ class Cryptor:
                 exc_info=True,
             )
 
-        return file_name_dec_path
+        return {
+            "success": True,
+            "backup_path": file_name_dec_path,
+        }

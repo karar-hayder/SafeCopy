@@ -2,9 +2,8 @@ from enum import Enum
 
 
 class CompressionType(str, Enum):
-    GZIP = "gzip"
-    LZMA = "lzma"
-    ZSTD = "zstd"
+    ZIP = "zip"
+    TAR = "tar"
     NONE = "none"
 
 

@@ -55,7 +55,7 @@ class MappingsCreateDTO(MappingsBaseDTO):
     @field_validator("compression")
     @classmethod
     def validate_compression(cls, v: CompressionType) -> CompressionType:
-        if v not in [CompressionType.NONE, CompressionType.GZIP]:
+        if v not in CompressionType:
             raise ValueError("Invalid compression type")
         return v
 
@@ -99,7 +99,7 @@ class MappingsUpdateDTO(MappingsBaseDTO):
     @field_validator("compression")
     @classmethod
     def validate_compression(cls, v: CompressionType) -> CompressionType:
-        if v not in [CompressionType.NONE, CompressionType.GZIP]:
+        if v not in CompressionType:
             raise ValueError("Invalid compression type")
         return v
 
