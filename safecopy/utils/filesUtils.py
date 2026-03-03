@@ -45,12 +45,21 @@ def _compute_file_checksum(file_path, hasher="md5"):
     return h.hexdigest()
 
 
-def atomic_file_rename(tmp_path, final_path):
+def atomic_file_rename(tmp_path, final_path, retries=3, delay=0.5):
     """
     Atomically move the temporary file to the final location.
     Overwrites the final path if necessary.
+    Includes retry logic for Windows to handle transient locks.
     """
-    try:
-        os.replace(str(tmp_path), str(final_path))
-    except Exception as e:
-        raise e
+    import time
+
+    for i in range(retries):
+        try:
+            os.replace(str(tmp_path), str(final_path))
+            return
+        except PermissionError as e:
+            if i == retries - 1:
+                raise e
+            time.sleep(delay)
+        except Exception as e:
+            raise e

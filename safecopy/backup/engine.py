@@ -92,10 +92,11 @@ class BackupEngine:
         src = sanitize_filename(self.source.name)
 
         uuid_str = self.config.uuid[:8]
+        job_id_str = self.job_status.id[:8]
         compression = self.compression.value_name
         compression_ext = self.compression.extension
 
-        name_parts = ["safe_copy", src, timestamp, uuid_str, compression]
+        name_parts = ["safe_copy", src, timestamp, uuid_str, job_id_str, compression]
         name = "_".join(name_parts)
 
         self.backup_path = Path(self.destination / f"{name}{compression_ext}")
@@ -270,26 +271,49 @@ class BackupEngine:
 
     def _cleanup_files(self, with_backup: bool = False):
         if self.temp_file and self.temp_file.exists():
-            self.temp_file.unlink()
+            try:
+                self.temp_file.unlink()
+            except Exception:
+                pass
         if self.temp_dir and self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir)
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
         if with_backup and self.backup_path and self.backup_path.exists():
-            if self.backup_path.is_file():
-                self.backup_path.unlink()
-            else:
-                shutil.rmtree(self.backup_path)
+            # If we are failing, try to remove the corrupted backup
+            # using a small retry loop or ignoring if locked
+            import time
+
+            for _ in range(3):
+                try:
+                    if self.backup_path.is_file():
+                        self.backup_path.unlink()
+                    else:
+                        shutil.rmtree(self.backup_path)
+                    break
+                except PermissionError:
+                    time.sleep(0.5)
+                except Exception:
+                    break
 
     def _clean_old_backups(self):
         try:
             pattern = f"safe_copy_*_{self.config.uuid[:8]}_*"
-            backups = list(self.destination.glob(pattern))
+            all_files = list(self.destination.glob(pattern))
+
+            # Only count actual backups, not sidecar manifests
+            backups = [b for b in all_files if not b.name.endswith("_manifest.json")]
             backups.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
             for backup in backups[self.config.max_versions :]:
                 try:
                     if backup.is_file():
                         backup.unlink()
                     else:
                         shutil.rmtree(backup)
+
+                    # Also clean up sidecar manifest if any
+                    sidecar = backup.parent / (backup.name + "_manifest.json")
+                    if sidecar.exists():
+                        sidecar.unlink()
                 except Exception as e:
                     self.logger.error("Failed to remove old backup %s: %s", backup, e)
         except Exception as e:

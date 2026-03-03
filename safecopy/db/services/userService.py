@@ -8,6 +8,7 @@ from safecopy.db.dtos.userDTOs import (
     UserResponseDTO,
     UserUpdateDTO,
 )
+from safecopy.db.enums import UserRole
 from safecopy.db.models import User
 from safecopy.db.repos.userRepo import UserRepo
 from safecopy.db.services.baseService import BaseService
@@ -24,15 +25,20 @@ class UserService(BaseService):
             "login": UserLoginDTO,
         }
 
-    def get_user_by_username(self, username: str) -> Optional[UserResponseDTO | User]:
+    def get_user_by_username(self, username: str) -> Optional[UserResponseDTO]:
         with get_session() as session:
             repo = self._repo(session)
             obj = repo.get_by_username(username)
-            if self.dto_cls["response"]:
+            if obj and self.dto_cls["response"]:
                 return self.dto_cls["response"].model_validate(
                     obj, from_attributes=True
                 )
-            return obj
+            return None
+
+    def get_user_model_by_username(self, username: str) -> Optional[User]:
+        with get_session() as session:
+            repo = self._repo(session)
+            return repo.get_by_username(username)
 
     def login(self, dto: UserLoginDTO) -> bool:
         with get_session() as session:
@@ -69,3 +75,13 @@ class UserService(BaseService):
                 repo.update(user)
                 return True
             return False
+
+    def ensure_admin_exists(self):
+        with get_session() as session:
+            repo = self._repo(session)
+            if repo.count() == 0:
+                self.register(
+                    UserCreateDTO(
+                        username="admin", password="adminpassword", role=UserRole.ADMIN
+                    )
+                )

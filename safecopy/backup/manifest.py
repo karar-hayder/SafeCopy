@@ -1,9 +1,6 @@
 import hashlib
 import json
-import os
-import shutil
 import tarfile
-import tempfile
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -106,11 +103,9 @@ def generate_for_zip(zip_path: Path, hasher: str = "md5") -> dict:
                 pass
             return info.filename, {"size": size, "mtime": mtime, "checksum": checksum}
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            futures = [pool.submit(_stat_and_hash, info) for info in members]
-            for future in as_completed(futures):
-                arcname, entry = future.result()
-                result[arcname] = entry
+        for info in members:
+            arcname, entry = _stat_and_hash(info)
+            result[arcname] = entry
 
     return result
 
@@ -142,11 +137,9 @@ def generate_for_tar(tar_path: Path, hasher: str = "md5") -> dict:
                 pass
             return member.name, {"size": size, "mtime": mtime, "checksum": checksum}
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            futures = [pool.submit(_stat_and_hash, m) for m in members]
-            for future in as_completed(futures):
-                arcname, entry = future.result()
-                result[arcname] = entry
+        for m in members:
+            arcname, entry = _stat_and_hash(m)
+            result[arcname] = entry
 
     return result
 
@@ -165,34 +158,40 @@ def embed_in_zip(zip_path: Path, manifest: dict) -> None:
 
 def embed_in_tar(tar_path: Path, manifest: dict) -> None:
     """
-    Re-pack a TAR.GZ to include manifest.json.
-    Uses a temp directory to extract, inject, and repack atomically.
+    Re-pack a TAR.GZ to include manifest.json without full extraction.
     """
     manifest_bytes = json.dumps(manifest, separators=(",", ":")).encode("utf-8")
-    tmp_dir = Path(tempfile.mkdtemp())
     tmp_tar = tar_path.with_suffix(".tmp.tar.gz")
 
     try:
-        with tarfile.open(tar_path, "r:gz") as tf:
-            tf.extractall(tmp_dir)
+        with tarfile.open(tar_path, "r:gz") as tf_old, tarfile.open(
+            tmp_tar, "w:gz"
+        ) as tf_new:
+            # Copy all existing members
+            for member in tf_old.getmembers():
+                if member.name != MANIFEST_FILENAME:
+                    f = tf_old.extractfile(member)
+                    tf_new.addfile(member, f)
 
-        manifest_path = tmp_dir / MANIFEST_FILENAME
-        manifest_path.write_bytes(manifest_bytes)
+            # Add manifest
+            tarinfo = tarfile.TarInfo(MANIFEST_FILENAME)
+            tarinfo.size = len(manifest_bytes)
+            tarinfo.mtime = int(time.time())
+            import io
 
-        with tarfile.open(tmp_tar, "w:gz") as tf_new:
-            for root, _, files in scandir_walk(tmp_dir):
-                root_path = Path(root)
-                for name in files:
-                    fp = root_path / name
-                    arcname = str(fp.relative_to(tmp_dir)).replace("\\", "/")
-                    tf_new.add(fp, arcname=arcname)
+            tf_new.addfile(tarinfo, io.BytesIO(manifest_bytes))
 
-        os.replace(str(tmp_tar), str(tar_path))
+        # Atomic swap
+        from safecopy.utils.filesUtils import atomic_file_rename
+
+        atomic_file_rename(tmp_tar, tar_path)
 
     finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
         if tmp_tar.exists():
-            tmp_tar.unlink()
+            try:
+                tmp_tar.unlink()
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------

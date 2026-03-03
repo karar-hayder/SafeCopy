@@ -74,6 +74,11 @@ class BaseService:
                 )
             return obj
 
+    def get_model_by_uuid(self, uuid: str) -> Optional[ModelType]:
+        with get_session() as session:
+            repo = self._repo(session)
+            return repo.get_by_uuid(uuid)
+
     def create(self, dto: CreateDTOType) -> ModelType | ResponseDTOType:
         with get_session() as session:
             repo = self._repo(session)
@@ -93,7 +98,9 @@ class BaseService:
             repo = self._repo(session)
             obj = repo.get_by_uuid(uuid)
             if obj:
-                for key, value in dto.model_dump(mode="python").items():
+                for key, value in dto.model_dump(
+                    mode="python", exclude_unset=True
+                ).items():
                     if hasattr(obj, key):
                         setattr(obj, key, value)
                 repo.update(obj)

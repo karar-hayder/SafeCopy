@@ -8,7 +8,7 @@ from safecopy.backup.verification import verify
 from safecopy.db.dtos.backupHistoryDTOs import BackupHistoryCreateDTO
 from safecopy.db.dtos.backupVerificationDTOs import BackupVerificationCreateDTO
 from safecopy.db.enums import BackupStatus, BackupVerificationStatus, HashType
-from safecopy.db.services.BackupHistoryService import BackupHistoryService
+from safecopy.db.services.backupHistoryService import BackupHistoryService
 from safecopy.db.services.backupVerificationService import BackupVerificationService
 
 logger = logging.getLogger("backup_runner")

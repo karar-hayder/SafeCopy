@@ -14,7 +14,7 @@ from safecopy.db.enums import (
     PasswdMode,
     UserRole,
 )
-from safecopy.db.services.BackupHistoryService import BackupHistoryService
+from safecopy.db.services.backupHistoryService import BackupHistoryService
 from safecopy.db.services.backupVerificationService import BackupVerificationService
 from safecopy.db.services.mappingsService import MappingsService
 from safecopy.db.services.userService import UserService

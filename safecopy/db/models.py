@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Any
 
+from flask_login import UserMixin
 from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from werkzeug.security import check_password_hash
 
 from .base import Base
 from .enums import (
@@ -33,7 +35,10 @@ class Mappings(Base):
         Enum(PasswdMode), default=PasswdMode.NONE
     )
     backup_history: Mapped[list["BackupHistory"]] = relationship(
-        "BackupHistory", back_populates="mapping"
+        "BackupHistory", back_populates="mapping", cascade="all, delete-orphan"
+    )
+    backup_schedules: Mapped[list["BackupSchedules"]] = relationship(
+        "BackupSchedules", back_populates="mapping", cascade="all, delete-orphan"
     )
 
 
@@ -53,6 +58,11 @@ class BackupHistory(Base):
     mapping: Mapped["Mappings"] = relationship(
         "Mappings", back_populates="backup_history"
     )
+    verification: Mapped[list["BackupVerification"]] = relationship(
+        "BackupVerification",
+        back_populates="backup_history",
+        cascade="all, delete-orphan",
+    )
 
 
 class BackupSchedules(Base):
@@ -63,11 +73,15 @@ class BackupSchedules(Base):
     schedule_type: Mapped[ScheduleType] = mapped_column(
         Enum(ScheduleType), nullable=False
     )
+    schedule_value: Mapped[str] = mapped_column(String, nullable=False)
     schedule_interval: Mapped[int] = mapped_column(Integer, nullable=True)
     schedule_interval_type: Mapped[ScheduleIntervalType] = mapped_column(
         Enum(ScheduleIntervalType), nullable=True
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    mapping: Mapped["Mappings"] = relationship(
+        "Mappings", back_populates="backup_schedules"
+    )
 
 
 class BackupVerification(Base):
@@ -82,12 +96,21 @@ class BackupVerification(Base):
     )
     verified_at: Mapped[datetime] = mapped_column(DateTime)
     verification_msg: Mapped[str] = mapped_column(String)
+    backup_history: Mapped["BackupHistory"] = relationship(
+        "BackupHistory", back_populates="verification"
+    )
 
 
-class User(Base):
+class User(Base, UserMixin):
     __tablename__ = "user"
 
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.USER)
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default={})
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password, password)
+
+    def get_id(self):
+        return self.uuid

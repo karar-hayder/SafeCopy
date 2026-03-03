@@ -4,7 +4,7 @@ from safecopy.db.dtos.backupHistoryDTOs import BackupHistoryCreateDTO
 from safecopy.db.dtos.mappingsDTOs import MappingsCreateDTO
 from safecopy.db.dtos.userDTOs import UserCreateDTO
 from safecopy.db.enums import BackupStatus, CompressionType, PasswdMode, UserRole
-from safecopy.db.services.BackupHistoryService import BackupHistoryService
+from safecopy.db.services.backupHistoryService import BackupHistoryService
 from safecopy.db.services.mappingsService import MappingsService
 from safecopy.db.services.userService import UserService
 

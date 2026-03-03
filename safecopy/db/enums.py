@@ -14,6 +14,8 @@ class PasswdMode(str, Enum):
 
 
 class ScheduleType(str, Enum):
+    MINUTE = "minutes"
+    HOURLY = "hourly"
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"

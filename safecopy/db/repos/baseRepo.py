@@ -1,6 +1,6 @@
 from typing import List, Optional, TypeVar
 
-from sqlalchemy import asc, desc, select
+from sqlalchemy import asc, desc, func, select
 
 T = TypeVar("T")
 
@@ -42,3 +42,9 @@ class BaseRepo:
 
     def get_one(self, **filters) -> Optional[T]:
         return self.session.scalars(select(self.model).filter_by(**filters)).first()
+
+    def count(self, **filters) -> int:
+        stmt = select(func.count()).select_from(self.model)
+        if filters:
+            stmt = stmt.filter_by(**filters)
+        return self.session.scalar(stmt) or 0

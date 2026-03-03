@@ -11,6 +11,7 @@ class BackupSchedulesDTOBase(BaseModel):
     user_uuid: str
     mapping_uuid: str
     schedule_type: ScheduleType
+    schedule_value: str
     schedule_interval: Optional[int] = None
     schedule_interval_type: Optional[ScheduleIntervalType] = None
     enabled: bool = True
@@ -60,6 +61,7 @@ class BackupSchedulesUpdateDTO(BaseModel):
     user_uuid: Optional[str] = None
     mapping_uuid: Optional[str] = None
     schedule_type: Optional[ScheduleType] = None
+    schedule_value: Optional[str] = None
     schedule_interval: Optional[int] = None
     schedule_interval_type: Optional[ScheduleIntervalType] = None
     enabled: Optional[bool] = None

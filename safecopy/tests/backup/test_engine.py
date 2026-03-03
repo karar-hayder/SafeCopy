@@ -180,6 +180,38 @@ def test_tar_backup_has_embedded_manifest(src_dir, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Unique Filenames & Job IDs
+# ---------------------------------------------------------------------------
+
+
+def test_backup_filenames_include_job_id(src_file, tmp_path):
+    config = _make_config(tmp_path, src_file, compression="none")
+    engine = BackupEngine(config)
+    engine.run()
+
+    dst = Path(config.destination)
+    job_id = engine.job_status.id[:8]
+    backup_files = list(dst.glob(f"*_{job_id}_*"))
+    assert len(backup_files) >= 1
+    assert job_id in backup_files[0].name
+
+
+def test_concurrent_backups_unique_paths(src_file, tmp_path):
+    config = _make_config(tmp_path, src_file, compression="none")
+    engine1 = BackupEngine(config)
+    engine2 = BackupEngine(config)
+
+    # They should have different job IDs even if created almost at once
+    engine1._backup_job()
+    engine2._backup_job()
+
+    assert engine1.job_status.id != engine2.job_status.id
+    assert engine1.backup_path != engine2.backup_path
+    assert engine1.backup_path.exists()
+    assert engine2.backup_path.exists()
+
+
+# ---------------------------------------------------------------------------
 # Empty backup guard
 # ---------------------------------------------------------------------------
 
