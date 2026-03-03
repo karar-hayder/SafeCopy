@@ -60,8 +60,13 @@ To provide a highly reliable, structurally sound, and cryptographically secure b
 - **Quality Assurance**
   - ✅ Comprehensive test coverage for the `backup/` package.
   - ✅ Service-layer unit tests for all domain entities.
-  - [ ] Refactor Web UI to use the new architecture.
-  - [ ] Add more tests for the new architecture.
+  - ✅ Integration tests for Scheduler and Web API routes.
+  - ✅ Automated database isolation and clean-start logic for tests.
+  - ✅ Project standardization via `markdownlint` and `pre-commit` hooks.
+- **Web UI Modernization**
+  - ✅ Refactor Web UI to use the new Repository/Service architecture.
+  - ✅ Implementation of Jinja2 template inheritance for UI consistency.
+  - ✅ Enhanced Dashboard with real-time status and history updates.
 
 ### ⏳ Phase 4: System Intelligence & Robustness (v0.6.0 - v0.7.0)
 

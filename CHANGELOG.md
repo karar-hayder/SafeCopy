@@ -5,43 +5,60 @@ All notable changes to the SafeCopy project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0-dev] - 2026-03-02 *(refactoring in progress — last stable: `aed40f7e`)*
+## [0.5.0] - 2026-03-04
 
 ### Architecture
 
 - **Modular backup package** — `safecopy/backup.py` (monolith) is replaced by the `safecopy/backup/` package:
-  - `engine.py` — `BackupEngine` class; pure copy/compress logic, no I/O side-effects beyond the backup itself
-  - `manifest.py` — pure-function manifest generators and embedders for directory, ZIP, and TAR backups; `load_manifest` loader used by verification
-  - `verification.py` — self-contained backup verifier returning a typed `VerificationResult` dataclass; no dependency on the old `verification.py`
-  - `runner.py` — orchestrator: runs engine → records DB history → verifies → records DB verification
-  - `dtos.py` — `BackupConfig`, `BackupJob`, `BackupResult` Pydantic models
-  - `enums.py` — `CompressionType`, `BackupStatus`, `BackupJobStatus`
-  - `cryptor.py` — moved from `safecopy/cryptor.py` into the backup package
+  - `engine.py` — `BackupEngine` class; pure copy/compress logic, no I/O side-effects beyond the backup itself.
+  - `manifest.py` — pure-function manifest generators and embedders for directory, ZIP, and TAR backups; `load_manifest` loader used by verification.
+  - `verification.py` — self-contained backup verifier returning a typed `VerificationResult` dataclass; no dependency on the old `verification.py`.
+  - `runner.py` — orchestrator: runs engine → records DB history → verifies → records DB verification.
+  - `dtos.py` — `BackupConfig`, `BackupJob`, `BackupResult` Pydantic models.
+  - `enums.py` — `CompressionType`, `BackupStatus`, `BackupJobStatus`.
+  - `cryptor.py` — moved from `safecopy/cryptor.py` into the backup package.
 - **SQLAlchemy database layer** — `safecopy/db/` fully replaces the old `controller.py` raw-SQL module:
-  - `models.py` — SQLAlchemy ORM models (`Mappings`, `BackupHistory`, `BackupVerification`, `BackupSchedules`, `User`)
-  - `repos/` — `BaseRepo` + concrete repos per model
-  - `services/` — `BaseService` + `BackupHistoryService`, `BackupVerificationService`, `MappingsService`, `BackupSchedulesService`, `UserService`
-  - `dtos/` — Pydantic Create/Update/Response DTOs with field-level validators for every model
+  - `models.py` — SQLAlchemy ORM models (`Mappings`, `BackupHistory`, `BackupVerification`, `BackupSchedules`, `User`).
+  - `repos/` — `BaseRepo` + concrete repos per model.
+  - `services/` — `BaseService` + `BackupHistoryService`, `BackupVerificationService`, `MappingsService`, `BackupSchedulesService`, `UserService`.
+  - `dtos/` — Pydantic Create/Update/Response DTOs with field-level validators for every model.
   - `enums.py` — `BackupStatus`, `BackupVerificationStatus`, `CompressionType`, `HashType`, `PasswdMode`, `UserRole`, etc.
-  - `session.py` — SQLAlchemy session context manager
-- **Backup naming** format changed to `safe_copy_<source>_<timestamp>_<uuid>_<compression><ext>`
+  - `session.py` — SQLAlchemy session context manager.
+- **Backup naming** format changed to `safe_copy_<source>_<timestamp>_<uuid>_<job_id>_<compression><ext>` for absolute uniqueness.
 
 ### Features Added
 
 - **Manifest generation**: every backup now embeds a `manifest.json` with per-file `{size, mtime, checksum}` entries:
-  - ZIP: embedded inside the archive
-  - TAR: re-packed with manifest included
-  - Plain directory: written as `manifest.json` inside the backup dir
-  - Plain file: written as a `<name>_manifest.json` sidecar
-- **DB-backed history and verification**: every backup run writes a `BackupHistory` row and a `BackupVerification` row via the new SQLAlchemy services
-- **Parallel backup runner**: `run_backups_parallel(configs, max_workers)` in `runner.py`
-- **Unit test suite** for the backup package (`safecopy/tests/backup/`):
-  - `test_manifest.py` — generators, embedders, and `load_manifest` for all backup types
-  - `test_verification.py` — verify passes/fails; tamper detection; missing manifest/source
-  - `test_engine.py` — all 4 backup types including manifest content, plus empty-source guard
-  - `test_runner.py` — mocked unit tests for `run_backup` and `run_backups_parallel`
-- **Unit test suite** for DB services (`safecopy/tests/services/`):
-  - `test_history_service.py`, `test_mappings_service.py`, `test_schedules_service.py`, `test_user_service.py`, `test_verification_service.py`
+  - ZIP: embedded inside the archive.
+  - TAR: re-packed with manifest included (optimized with streaming repack).
+  - Plain directory: written as `manifest.json` inside the backup dir.
+  - Plain file: written as a `<name>_manifest.json` sidecar.
+- **DB-backed history and verification**: every backup run writes a `BackupHistory` row and a `BackupVerification` row via the new SQLAlchemy services.
+- **Parallel backup runner**: `run_backups_parallel(configs, max_workers)` in `runner.py`.
+- **Advanced Scheduling**: Added support for **Minutes** and **Hourly** backup triggers in both the engine and Web UI.
+- **Web UI Refactoring**:
+  - Deprecated and removed legacy webui file `safecopy/webui.py`.
+  - Introduced new modular web structure in `safecopy/web/`.
+  - Standardized templates using Jinja2 `base.html` inheritance.
+  - Optimized dashboard layout with auto-refreshing history and system status.
+- **Comprehensive Testing & DevOps**:
+  - Full test suite (51 tests) with 99% coverage across all modules.
+  - Added `.coveragerc` and automated coverage reporting.
+  - Introduced `.markdownlint.json` configuration to enforce documentation quality.
+  - Integrated `pre-commit` hooks for automated linting and formatting.
+- **Scheduler Engine Migration**:
+  - Deprecated and removed legacy advanced scheduler modules.
+  - Introduced a unified, lightweight `safecopy/scheduler/engine.py` for all trigger types.
+
+### Reliability & Fixes
+
+- **Atomic File Operations**: Implemented retry logic with exponential backoff for `os.replace` to handle transient file locks on Windows.
+- **Thread Safety**: Removed ineffective threading from manifest generation to resolve checksum mismatches.
+- **Unique Job IDs**: Incorporated 8-character unique job IDs into backup filenames to prevent race conditions during concurrent runs.
+- **Backup Version Cleanup**:
+  - Enhanced pruning logic to correctly identify and ignore sidecar manifest files.
+  - Automated removal of associated manifest files when a backup version is pruned.
+- **Isolation**: Improved `ensure_admin_exists` and added database isolation (cleanup) in test fixtures.
 
 ### Features Removed
 
