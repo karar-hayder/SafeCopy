@@ -79,7 +79,9 @@ class UserService(BaseService):
     def ensure_admin_exists(self):
         with get_session() as session:
             repo = self._repo(session)
-            if repo.count() == 0:
+            # Check if any admin exists instead of just count == 0
+            admin = repo.get_one(role=UserRole.ADMIN)
+            if not admin:
                 self.register(
                     UserCreateDTO(
                         username="admin", password="adminpassword", role=UserRole.ADMIN

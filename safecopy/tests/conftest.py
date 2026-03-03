@@ -24,6 +24,14 @@ def db_session(test_engine):
         autocommit=False, autoflush=False, expire_on_commit=False, bind=test_engine
     )
 
+    # Clear all data before each test for isolation
+
+    with test_engine.begin() as conn:
+        # For SQLite, we can just delete from each table.
+        # Check Base.metadata for existing tables.
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+
     # Patch the real SessionLocal and the get_session context manager's SessionLocal usage
     with patch("safecopy.db.session.SessionLocal", TestSessionLocal):
         session = TestSessionLocal()
