@@ -113,7 +113,7 @@ A structured restore pipeline is planned to reconstruct data from any backup art
 pytest safecopy/tests/ -v
 ```
 
-SafeCopy maintains a high-quality test suite (**51 tests, 99% coverage**) covering:
+SafeCopy maintains a high-quality test suite covering:
 
 - **Engine Logic**: Validating all compression, manifest embedding, and atomic move paths.
 - **Integrity Layer**: Catching tampered files via manifest comparison.
