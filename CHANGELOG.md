@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Standardized templates using Jinja2 `base.html` inheritance.
   - Optimized dashboard layout with auto-refreshing history and system status.
 - **Comprehensive Testing & DevOps**:
-  - Full test suite (51 tests) with 99% coverage across all modules.
+  - Full test suite (51 tests) with coverage across all modules.
   - Added `.coveragerc` and automated coverage reporting.
   - Introduced `.markdownlint.json` configuration to enforce documentation quality.
   - Integrated `pre-commit` hooks for automated linting and formatting.
