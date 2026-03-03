@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const currentPathInput = document.getElementById("currentPath");
   const folderList = document.getElementById("folderList");
 
-  let mappings = [];
-  let backupSettings = {
+  window.mappings = [];
+  window.backupSettings = {
     maxVersions: 3,
     compression: "none",
     encrypted: false,
@@ -49,43 +49,48 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Only allow rendering if mappingList and backupSettings elements exist
   function loadMappings() {
-    if (!mappingList) {
-      // Mappings UI is not present on this page
-      return;
-    }
     fetch("/get_mappings")
       .then((response) => response.json())
       .then((data) => {
-        mappings = data.mappings || [];
-        renderMappings();
+        window.mappings = data.data ? data.data.mappings : data.mappings || [];
+        if (mappingList) renderMappings();
       })
       .catch((error) => {
         console.error("Error loading mappings:", error);
-        addActionLogEntry("Error loading mappings", "danger");
+        if (actionLog)
+          addActionLogEntry(
+            "Error loading mappings: " + error.message,
+            "danger",
+          );
       });
   }
 
   function loadBackupSettings() {
-    if (!maxVersionsInput || !compressionSelect) {
-      // Settings UI is not present on this page
-      return;
-    }
     fetch("/get_backup_settings")
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          backupSettings = data.settings || backupSettings;
+          const settings = data.data ? data.data.settings : data.settings;
+          window.backupSettings = settings || window.backupSettings;
+
+          // Update UI if present
           if (maxVersionsInput)
-            maxVersionsInput.value = backupSettings.maxVersions;
+            maxVersionsInput.value = window.backupSettings.maxVersions || 3;
           if (compressionSelect)
-            compressionSelect.value = backupSettings.compression;
+            compressionSelect.value =
+              window.backupSettings.compression || "none";
           const encryptCheckbox = document.getElementById("encryptBackup");
           if (encryptCheckbox)
-            encryptCheckbox.checked = backupSettings.encrypted || false;
+            encryptCheckbox.checked = window.backupSettings.encrypted || false;
         }
       })
       .catch((error) => {
         console.error("Error loading backup settings:", error);
+        if (actionLog)
+          addActionLogEntry(
+            "Failed to load backup settings: " + error,
+            "danger",
+          );
       });
   }
 
@@ -95,13 +100,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     mappingList.innerHTML = "";
 
-    if (mappings.length === 0) {
+    if (window.mappings.length === 0) {
       mappingList.innerHTML =
         '<div class="text-center text-muted p-3">No mappings added yet</div>';
       return;
     }
 
-    mappings.forEach((mapping, index) => {
+    window.mappings.forEach((mapping, index) => {
       const mappingItem = document.createElement("div");
       mappingItem.className = "mapping-item";
 
@@ -110,9 +115,10 @@ document.addEventListener("DOMContentLoaded", function () {
       mappingInfo.innerHTML = `
                 <div><strong>Source:</strong> ${mapping.source}</div>
                 <div><strong>Destination:</strong> ${mapping.destination}</div>
-                <div><strong>Max Versions:</strong> ${mapping.max_versions || backupSettings.maxVersions}</div>
-                <div><strong>Compression:</strong> ${mapping.compression || backupSettings.compression}</div>
+                <div><strong>Max Versions:</strong> ${mapping.max_versions || window.backupSettings.maxVersions}</div>
+                <div><strong>Compression:</strong> ${mapping.compression || window.backupSettings.compression}</div>
                 <div><strong>Encrypted:</strong> ${mapping.encrypted ? "Yes" : "No"}</div>
+                <div class="text-muted small">ID: ${mapping.uuid}</div>
             `;
 
       const mappingActions = document.createElement("div");
@@ -121,14 +127,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "btn btn-sm btn-danger";
       deleteBtn.textContent = "Delete";
-      deleteBtn.addEventListener("click", function () {
-        mappings.splice(index, 1);
-        renderMappings();
-        addActionLogEntry(
-          `Deleted mapping: ${mapping.source} → ${mapping.destination}`,
-          "info",
-        );
-      });
+      deleteBtn.addEventListener("click", () => deleteMapping(index));
 
       mappingActions.appendChild(deleteBtn);
       mappingItem.appendChild(mappingInfo);
@@ -154,7 +153,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const encrypted = encryptCheckbox ? encryptCheckbox.checked : false;
 
     if (!source || !destination) {
-      addActionLogEntry(
+      showNotification(
         "Please select both source and destination folders",
         "warning",
       );
@@ -162,16 +161,16 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Check if mapping already exists
-    const mappingExists = mappings.some(
+    const mappingExists = window.mappings.some(
       (m) => m.source === source && m.destination === destination,
     );
 
     if (mappingExists) {
-      addActionLogEntry("This mapping already exists", "warning");
+      showNotification("This mapping already exists", "warning");
       return;
     }
 
-    mappings.push({
+    window.mappings.push({
       source: source,
       destination: destination,
       max_versions: maxVersions,
@@ -180,16 +179,41 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     renderMappings();
-    addActionLogEntry(`Added mapping: ${source} → ${destination}`, "success");
+    showNotification(`Added mapping: ${source} → ${destination}`, "success");
+  }
+
+  function deleteMapping(index) {
+    mapping_uuid = window.mappings[index].uuid;
+    fetch("/delete_mapping", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ uuid: mapping_uuid }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          showNotification("Mapping deleted successfully", "success");
+          window.mappings.splice(index, 1);
+          renderMappings();
+        } else {
+          showNotification(`Error deleting mapping: ${data.error}`, "danger");
+        }
+      })
+      .catch((error) => {
+        console.error("Error deleting mapping:", error);
+        showNotification(`Failed to delete mapping: ${error}`, "danger");
+      });
   }
 
   function saveMappings() {
     if (!maxVersionsInput || !compressionSelect) return;
 
-    backupSettings.maxVersions = parseInt(maxVersionsInput.value) || 3;
-    backupSettings.compression = compressionSelect.value;
+    window.backupSettings.maxVersions = parseInt(maxVersionsInput.value) || 3;
+    window.backupSettings.compression = compressionSelect.value;
     const encryptCheckbox = document.getElementById("encryptBackup");
-    backupSettings.encrypted = encryptCheckbox
+    window.backupSettings.encrypted = encryptCheckbox
       ? encryptCheckbox.checked
       : false;
 
@@ -198,16 +222,21 @@ document.addEventListener("DOMContentLoaded", function () {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ settings: backupSettings }),
+      body: JSON.stringify({ settings: window.backupSettings }),
     })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
           console.error("Error saving backup settings:", data.error);
+          showNotification(
+            `Error saving backup settings: ${data.error}`,
+            "danger",
+          );
         }
       })
       .catch((error) => {
         console.error("Error saving backup settings:", error);
+        showNotification(`Failed to save backup settings: ${error}`, "danger");
       });
 
     fetch("/save_mappings", {
@@ -215,32 +244,36 @@ document.addEventListener("DOMContentLoaded", function () {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ mappings: mappings }),
+      body: JSON.stringify({ mappings: window.mappings }),
     })
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          addActionLogEntry("Mappings saved successfully", "success");
+          showNotification("Mappings saved successfully", "success");
+          loadMappings(); // Reload to get potential new UUIDs from server if any were created
         } else {
-          addActionLogEntry(`Error saving mappings: ${data.error}`, "danger");
+          showNotification(`Error saving mappings: ${data.error}`, "danger");
         }
       })
       .catch((error) => {
         console.error("Error saving mappings:", error);
-        addActionLogEntry("Error saving mappings", "danger");
+        showNotification("Error saving mappings: " + error.message, "danger");
       });
   }
 
   function runBackup() {
-    if (!mappings || !mappings.length) {
-      addActionLogEntry(
+    console.log("Running backup...");
+    console.log(window.mappings);
+    console.log(window.backupSettings);
+    if (!window.mappings || !window.mappings.length) {
+      showNotification(
         "No mappings available. Please add mappings first.",
         "warning",
       );
       return;
     }
     if (!backupProgressModal || !progressBar || !progressStatus) {
-      addActionLogEntry(
+      showNotification(
         "Backup UI elements missing. Cannot run backup.",
         "danger",
       );
@@ -257,8 +290,8 @@ document.addEventListener("DOMContentLoaded", function () {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        mappings: mappings,
-        settings: backupSettings,
+        mappings: window.mappings,
+        settings: window.backupSettings,
       }),
     })
       .then((response) => {
@@ -272,12 +305,9 @@ document.addEventListener("DOMContentLoaded", function () {
           progressBar.style.width = "100%";
           progressBar.classList.remove("progress-bar-danger");
           progressBar.classList.add("progress-bar-success");
-          progressStatus.textContent =
-            data.message || "Backup completed successfully!";
-          addActionLogEntry(
-            data.message || "Backup completed successfully",
-            "success",
-          );
+          const msg = data.message || "Backup completed successfully!";
+          progressStatus.textContent = msg;
+          showNotification(msg, "success");
 
           setTimeout(() => {
             hideModal(backupProgressModal);
@@ -287,11 +317,11 @@ document.addEventListener("DOMContentLoaded", function () {
           progressBar.classList.remove("progress-bar-success");
           progressBar.classList.add("progress-bar-danger");
           progressStatus.textContent = `Error: ${data.error}`;
-          addActionLogEntry(`Backup failed: ${data.error}`, "danger");
+          showNotification(`Backup failed: ${data.error}`, "danger");
 
           if (data.details && Array.isArray(data.details)) {
             data.details.forEach((detail) => {
-              addActionLogEntry(detail, "danger");
+              showNotification(detail, "danger");
             });
           }
         }
@@ -302,7 +332,7 @@ document.addEventListener("DOMContentLoaded", function () {
         progressBar.classList.remove("progress-bar-success");
         progressBar.classList.add("progress-bar-danger");
         progressStatus.textContent = "Error running backup";
-        addActionLogEntry("Error running backup: " + error.message, "danger");
+        showNotification(`Backup error: ${error.message}`, "danger");
       });
   }
 
@@ -348,17 +378,18 @@ document.addEventListener("DOMContentLoaded", function () {
         return response.json();
       })
       .then((data) => {
-        if (data.error) {
+        if (!data.success) {
           addActionLogEntry(`Error browsing folders: ${data.error}`, "danger");
           return;
         }
 
+        const resData = data.data || {};
         currentPathInput.value = currentPath || "/";
         folderList.innerHTML = "";
 
         if (currentPath === "/" || currentPath === "") {
-          if (data.drives && data.drives.length > 0) {
-            data.drives.forEach((drive) => {
+          if (resData.drives && resData.drives.length > 0) {
+            resData.drives.forEach((drive) => {
               const driveItem = document.createElement("div");
               driveItem.className = "folder-item";
               driveItem.textContent = drive;
@@ -376,8 +407,8 @@ document.addEventListener("DOMContentLoaded", function () {
           parentItem.addEventListener("click", navigateUp);
           folderList.appendChild(parentItem);
 
-          if (data.folders && data.folders.length > 0) {
-            data.folders.forEach((folder) => {
+          if (resData.folders && resData.folders.length > 0) {
+            resData.folders.forEach((folder) => {
               const folderItem = document.createElement("div");
               folderItem.className = "folder-item";
               folderItem.textContent = folder;
@@ -428,7 +459,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (maxVersionsInput && compressionSelect) loadBackupSettings();
 
   // Add initial action log entry if actionLog present
-  if (actionLog) addActionLogEntry("Application started", "info");
+  if (actionLog) showNotification("Application started", "info");
 
   window.browseFolder = browseFolder;
   window.addMapping = addMapping;
@@ -438,6 +469,22 @@ document.addEventListener("DOMContentLoaded", function () {
   window.selectFolder = selectFolder;
   window.showModal = showModal;
   window.hideModal = hideModal;
+
+  // Make mappings and settings accessible to other scripts
+  window.SafeCopyState = {
+    get mappings() {
+      return window.mappings;
+    },
+    set mappings(v) {
+      window.mappings = v;
+    },
+    get settings() {
+      return window.backupSettings;
+    },
+    set settings(v) {
+      window.backupSettings = v;
+    },
+  };
 
   // Add event listeners for close buttons
   // (must wait for DOMContentLoaded so all modals are in DOM)

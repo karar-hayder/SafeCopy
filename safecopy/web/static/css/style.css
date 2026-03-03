@@ -65,6 +65,7 @@ h6 {
     transform 0.2s ease,
     box-shadow 0.2s ease;
   background-color: #fff;
+  width: 80%;
 }
 
 .card:hover {
@@ -83,6 +84,7 @@ h6 {
 
 .card-body {
   padding: 20px;
+  width: 80%;
 }
 
 .mapping-item {
@@ -599,6 +601,7 @@ h6 {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  width: 100%;
 }
 
 .summary-content {
@@ -664,4 +667,72 @@ h6 {
 
 .user-item:last-child {
   border-bottom: none;
+}
+
+/* Notifications */
+.notifications-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1050;
+  max-width: 350px;
+}
+
+.notifications-container .alert {
+  margin-bottom: 10px;
+  position: relative;
+  padding: 1rem;
+  padding-right: 2.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: white;
+  border-left: 5px solid #ccc;
+  animation: slideIn 0.3s ease-out;
+}
+
+.notifications-container .alert-success {
+  border-left-color: #2ecc71;
+  color: #155724;
+}
+
+.notifications-container .alert-danger {
+  border-left-color: #e74c3c;
+  color: #721c24;
+}
+
+.notifications-container .alert-warning {
+  border-left-color: #f39c12;
+  color: #856404;
+}
+
+.notifications-container .alert-info {
+  border-left-color: #3498db;
+  color: #0c5460;
+}
+
+.notifications-container .btn-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  opacity: 0.5;
+  color: #333;
+}
+
+.notifications-container .btn-close:hover {
+  opacity: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

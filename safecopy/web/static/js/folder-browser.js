@@ -96,37 +96,38 @@ document.addEventListener("DOMContentLoaded", function () {
     fetch(`/folder_preview?path=${encodeURIComponent(path)}`)
       .then((response) => response.json())
       .then((data) => {
-        if (data.error) {
+        if (!data.success) {
           previewContentElement.innerHTML = `<div class="text-center text-danger">${data.error}</div>`;
           return;
         }
 
+        const resData = data.data || {};
         let html = "";
 
-        if (data.files && data.files.length > 0) {
+        if (resData.files && resData.files.length > 0) {
           html += '<div class="mb-2"><strong>Files:</strong></div>';
-          data.files.slice(0, 5).forEach((file) => {
+          resData.files.slice(0, 5).forEach((file) => {
             html += `<div class="folder-preview-item">${file}</div>`;
           });
 
-          if (data.files.length > 5) {
-            html += `<div class="folder-preview-item text-muted">... and ${data.files.length - 5} more files</div>`;
+          if (resData.files.length > 5) {
+            html += `<div class="folder-preview-item text-muted">... and ${resData.files.length - 5} more files</div>`;
           }
         }
 
-        if (data.folders && data.folders.length > 0) {
+        if (resData.folders && resData.folders.length > 0) {
           html += '<div class="mb-2 mt-2"><strong>Folders:</strong></div>';
-          data.folders.slice(0, 5).forEach((folder) => {
+          resData.folders.slice(0, 5).forEach((folder) => {
             html += `<div class="folder-preview-item">${folder}</div>`;
           });
 
-          if (data.folders.length > 5) {
-            html += `<div class="folder-preview-item text-muted">... and ${data.folders.length - 5} more folders</div>`;
+          if (resData.folders.length > 5) {
+            html += `<div class="folder-preview-item text-muted">... and ${resData.folders.length - 5} more folders</div>`;
           }
         }
 
-        if (data.size) {
-          html += `<div class="mt-2 text-muted">Total size: ${data.size}</div>`;
+        if (resData.size) {
+          html += `<div class="mt-2 text-muted">Total size: ${resData.size}</div>`;
         }
 
         if (!html) {
@@ -137,8 +138,7 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         console.error("Error loading folder preview:", error);
-        previewContentElement.innerHTML =
-          '<div class="text-center text-danger">Error loading folder preview</div>';
+        previewContentElement.innerHTML = `<div class="text-center text-danger">Error loading folder preview: ${error.message}</div>`;
       });
   }
 
@@ -150,20 +150,27 @@ document.addEventListener("DOMContentLoaded", function () {
     fetch(`/browse_folders?path=${encodeURIComponent(path)}`)
       .then((response) => response.json())
       .then((data) => {
+        if (!data.success) {
+          folderList.innerHTML = `<div class="p-3 text-center text-danger">${data.error}</div>`;
+          return;
+        }
+        const resData = data.data || {};
         folderList.innerHTML = "";
 
         // Add drives
         if (path === "/") {
-          data.drives.forEach((drive) => {
-            const driveItem = document.createElement("div");
-            driveItem.className = "folder-item";
-            driveItem.textContent = drive;
-            driveItem.dataset.path = drive;
-            driveItem.addEventListener("click", function () {
-              fetchFolders(drive);
+          if (resData.drives) {
+            resData.drives.forEach((drive) => {
+              const driveItem = document.createElement("div");
+              driveItem.className = "folder-item";
+              driveItem.textContent = drive;
+              driveItem.dataset.path = drive;
+              driveItem.addEventListener("click", function () {
+                fetchFolders(drive);
+              });
+              folderList.appendChild(driveItem);
             });
-            folderList.appendChild(driveItem);
-          });
+          }
         } else {
           // Add parent directory
           const parentItem = document.createElement("div");
@@ -176,16 +183,18 @@ document.addEventListener("DOMContentLoaded", function () {
           folderList.appendChild(parentItem);
 
           // Add folders
-          data.folders.forEach((folder) => {
-            const folderItem = document.createElement("div");
-            folderItem.className = "folder-item";
-            folderItem.textContent = folder;
-            folderItem.dataset.path = `${path}/${folder}`;
-            folderItem.addEventListener("click", function () {
-              fetchFolders(`${path}/${folder}`);
+          if (resData.folders) {
+            resData.folders.forEach((folder) => {
+              const folderItem = document.createElement("div");
+              folderItem.className = "folder-item";
+              folderItem.textContent = folder;
+              folderItem.dataset.path = `${path}/${folder}`;
+              folderItem.addEventListener("click", function () {
+                fetchFolders(`${path}/${folder}`);
+              });
+              folderList.appendChild(folderItem);
             });
-            folderList.appendChild(folderItem);
-          });
+          }
 
           // Add select button for current folder
           const selectItem = document.createElement("div");
@@ -200,8 +209,7 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         console.error("Error fetching folders:", error);
-        folderList.innerHTML =
-          '<div class="p-3 text-center text-danger">Error loading folders</div>';
+        folderList.innerHTML = `<div class="p-3 text-center text-danger">Error loading folders: ${error.message}</div>`;
       });
   }
 });

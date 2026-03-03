@@ -1,0 +1,46 @@
+<!-- Notifications Partial -->
+<div id="notificationsContainer" class="notifications-container">
+  {% with messages = get_flashed_messages(with_categories=true) %} {% if
+  messages %} {% for category, message in messages %}
+  <div
+    class="alert alert-{{ category }} alert-dismissible fade show"
+    role="alert"
+  >
+    {{ message }}
+    <button
+      type="button"
+      class="btn-close"
+      data-bs-dismiss="alert"
+      aria-label="Close"
+      onclick="this.parentElement.remove()"
+    >
+      &times;
+    </button>
+  </div>
+  {% endfor %} {% endif %} {% endwith %}
+</div>
+
+<script>
+  function showNotification(message, type = "info", duration = 5000) {
+    const container = document.getElementById("notificationsContainer");
+    if (!container) return;
+
+    const alert = document.createElement("div");
+    alert.className = `alert alert-${type}`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+
+    container.appendChild(alert);
+
+    if (duration > 0) {
+      setTimeout(() => {
+        alert.style.opacity = "0";
+        alert.style.transform = "translateX(100%)";
+        alert.style.transition = "all 0.5s ease-in";
+        setTimeout(() => alert.remove(), 500);
+      }, duration);
+    }
+  }
+</script>

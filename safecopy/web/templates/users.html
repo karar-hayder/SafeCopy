@@ -1,0 +1,87 @@
+{% extends 'base.html' %} {% block title %}SafeCopy - Manage Users{% endblock %}
+{% block header_title %}User Management{% endblock %} {% block content %}
+<div class="card">
+  <div class="card-header">
+    <h5>Create New User</h5>
+  </div>
+  <div class="card-body">
+    <form id="createUserForm" onsubmit="createUser(event)">
+      <div class="form-group">
+        <label for="newUsername">Username:</label>
+        <input type="text" id="newUsername" class="form-control" required />
+      </div>
+      <div class="form-group">
+        <label for="newPassword">Password:</label>
+        <input type="password" id="newPassword" class="form-control" required />
+      </div>
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password:</label>
+        <input
+          type="password"
+          id="confirmPassword"
+          class="form-control"
+          required
+        />
+      </div>
+      <button type="submit" class="btn btn-success">Create User</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Change Password</h5>
+  </div>
+  <div class="card-body">
+    <form id="changePasswordForm" onsubmit="changePassword(event)">
+      <div class="form-group">
+        <label for="changeUsername">Username:</label>
+        <input type="text" id="changeUsername" class="form-control" required />
+      </div>
+      <div class="form-group">
+        <label for="oldPassword">Old Password:</label>
+        <input type="password" id="oldPassword" class="form-control" required />
+      </div>
+      <div class="form-group">
+        <label for="newPasswordChange">New Password:</label>
+        <input
+          type="password"
+          id="newPasswordChange"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="form-group">
+        <label for="confirmPasswordChange">Confirm New Password:</label>
+        <input
+          type="password"
+          id="confirmPasswordChange"
+          class="form-control"
+          required
+        />
+      </div>
+      <button type="submit" class="btn btn-primary">Change Password</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Existing Users</h5>
+  </div>
+  <div class="card-body">
+    <div id="usersList" class="user-list">
+      <p style="color: #666">Loading users...</p>
+    </div>
+    <button
+      class="btn btn-secondary btn-sm"
+      onclick="loadUsers()"
+      style="margin-top: 10px"
+    >
+      Refresh List
+    </button>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script src="{{ url_for('static', filename='js/users.js') }}"></script>
+{% endblock %}

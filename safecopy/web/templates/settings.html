@@ -1,0 +1,307 @@
+{% extends 'base.html' %} {% block title %}SafeCopy - Settings{% endblock %} {%
+block header_title %}SafeCopy Settings{% endblock %} {% block content %}
+<div class="card">
+  <div class="card-header">
+    <h5>Source Folder</h5>
+  </div>
+  <div class="card-body">
+    <div class="input-group">
+      <input type="text" id="sourcePath" class="form-control" readonly />
+      <button class="btn btn-primary" onclick="browseFolder('source')">
+        Browse
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Destination Folder</h5>
+  </div>
+  <div class="card-body">
+    <div class="input-group">
+      <input type="text" id="destPath" class="form-control" readonly />
+      <button class="btn btn-primary" onclick="browseFolder('dest')">
+        Browse
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Backup Settings</h5>
+  </div>
+  <div class="card-body">
+    <div class="form-group">
+      <label for="maxVersions">Maximum Versions to Keep:</label>
+      <input
+        type="number"
+        id="maxVersions"
+        class="form-control"
+        value="3"
+        min="1"
+        max="10"
+      />
+    </div>
+    <div class="form-group">
+      <label for="compression">Compression Level:</label>
+      <select id="compression" class="form-control">
+        <option value="none">None</option>
+        <option value="zip">ZIP</option>
+        <option value="tar">TAR</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="encryptBackup" />
+        Encrypt Backup (AES-256-GCM)
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Folder Mappings</h5>
+  </div>
+  <div class="card-body">
+    <div id="mappingsList" class="mapping-list"></div>
+    <div class="button-group">
+      <button class="btn btn-success" onclick="addMapping()">
+        Add Mapping
+      </button>
+      <button class="btn btn-primary" onclick="saveMappings()">
+        Save Mappings
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Backup Schedules</h5>
+  </div>
+  <div class="card-body">
+    <p style="color: #666; margin-bottom: 15px">
+      Configure automatic backup schedules for your mappings.
+    </p>
+    <div id="schedulesList" class="schedules-list"></div>
+    <div class="button-group" style="margin-top: 15px">
+      <button class="btn btn-success" onclick="showAddScheduleModal()">
+        Add Schedule
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Email Notifications</h5>
+  </div>
+  <div class="card-body">
+    <div class="form-group">
+      <label>
+        <input
+          type="checkbox"
+          id="emailEnabled"
+          onchange="toggleEmailSettings()"
+        />
+        Enable Email Notifications
+      </label>
+    </div>
+    <div id="emailSettings" style="display: none">
+      <div class="form-group">
+        <label for="smtpServer">SMTP Server:</label>
+        <input
+          type="text"
+          id="smtpServer"
+          class="form-control"
+          placeholder="smtp.gmail.com"
+        />
+      </div>
+      <div class="form-group">
+        <label for="smtpPort">SMTP Port:</label>
+        <input
+          type="number"
+          id="smtpPort"
+          class="form-control"
+          value="587"
+          min="1"
+          max="65535"
+        />
+      </div>
+      <div class="form-group">
+        <label for="smtpUsername">SMTP Username (optional):</label>
+        <input
+          type="text"
+          id="smtpUsername"
+          class="form-control"
+          placeholder="your-email@gmail.com"
+        />
+      </div>
+      <div class="form-group">
+        <label for="smtpPassword">SMTP Password (optional):</label>
+        <input
+          type="password"
+          id="smtpPassword"
+          class="form-control"
+          placeholder="Your password or app password"
+        />
+      </div>
+      <div class="form-group">
+        <label for="fromEmail">From Email:</label>
+        <input
+          type="email"
+          id="fromEmail"
+          class="form-control"
+          placeholder="sender@example.com"
+        />
+      </div>
+      <div class="form-group">
+        <label for="toEmail">To Email:</label>
+        <input
+          type="email"
+          id="toEmail"
+          class="form-control"
+          placeholder="recipient@example.com"
+        />
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="useTLS" checked />
+          Use TLS Encryption
+        </label>
+      </div>
+      <button class="btn btn-primary" onclick="saveEmailSettings()">
+        Save Email Settings
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5>Backup History</h5>
+  </div>
+  <div class="card-body">
+    <div id="actionLog" class="action-log"></div>
+    <button
+      class="btn btn-secondary"
+      onclick="loadBackupHistory()"
+      style="margin-top: 10px"
+    >
+      Refresh History
+    </button>
+  </div>
+</div>
+
+<div class="button-group">
+  <button class="btn btn-primary" onclick="runBackup()">Run Backup Now</button>
+</div>
+{% endblock %} {% block modals %}
+<!-- Folder Browser Modal -->
+<div id="folderBrowserModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5>Browse Folders</h5>
+      <button class="close-btn" onclick="hideModal('folderBrowserModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <input type="text" id="currentPath" class="form-control" readonly />
+        <button class="btn btn-primary" onclick="navigateUp()">Up</button>
+      </div>
+      <div id="folderList" class="folder-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="selectFolder()">Select</button>
+      <button
+        class="btn btn-secondary"
+        onclick="hideModal('folderBrowserModal')"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup Progress Modal -->
+<div id="backupProgressModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5>Backup Progress</h5>
+      <button class="close-btn" onclick="hideModal('backupProgressModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="progress">
+        <div
+          id="progressBar"
+          class="progress-bar"
+          role="progressbar"
+          style="width: 0%"
+        ></div>
+      </div>
+      <div id="progressStatus" class="progress-status">Preparing backup...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Schedule Modal -->
+<div id="addScheduleModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5>Add Backup Schedule</h5>
+      <button class="close-btn" onclick="hideModal('addScheduleModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="scheduleMapping">Mapping:</label>
+        <select id="scheduleMapping" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label for="scheduleType">Schedule Type:</label>
+        <select
+          id="scheduleType"
+          class="form-control"
+          onchange="updateScheduleInput()"
+        >
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="hourly">Hourly</option>
+          <option value="minutes">Minutes</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label id="scheduleValueLabel" for="scheduleValue">Time (HH:MM):</label>
+        <input
+          type="text"
+          id="scheduleValue"
+          class="form-control"
+          placeholder="14:30"
+        />
+        <small id="scheduleHelp" class="form-text text-muted"
+          >Enter time in 24-hour format (e.g., 14:30)</small
+        >
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveSchedule()">
+        Save Schedule
+      </button>
+      <button class="btn btn-secondary" onclick="hideModal('addScheduleModal')">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}
